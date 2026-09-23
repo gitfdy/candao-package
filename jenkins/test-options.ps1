@@ -40,6 +40,33 @@ try {
     [xml]$explicit = Get-Content "$temp/explicit/HPOS-Android-Package.xml" -Raw -Encoding UTF8
     Assert ($explicit.SelectSingleNode('//userRemoteConfigs/*/url').InnerText -eq 'https://example.invalid/package.git') 'Explicit remote ignored'
     Assert ($explicit.SelectSingleNode('//branches/*/name').InnerText -eq '*/feature/build') 'Explicit branch ignored'
+    # Execute the real Windows preflight with filesystem/SDK probes mocked.
+    $windowsPipeline = Get-Content "$PSScriptRoot/windows.Jenkinsfile" -Raw -Encoding UTF8
+    $preflight = [regex]::Match($windowsPipeline, "(?s)stage\('Preflight'\).*?powershell '''(.*?)'''").Groups[1].Value.Replace('\\', '\')
+    Assert ($preflight.Length -gt 0) 'Windows preflight not found'
+    & {
+        $env:PROJECT = 'toa-pos'
+        $script:hasFvmrc = $false
+        $script:sdkVersion = '3.41.9'
+        function Test-Path { param($LiteralPath) if ($LiteralPath -eq '.fvmrc') { return $script:hasFvmrc }; return $true }
+        function Get-Command { return 'fvm' }
+        function Get-Content { if (!$script:hasFvmrc) { throw 'Missing .fvmrc' }; return '{"flutter":"3.41.9"}' }
+        function git { $global:LASTEXITCODE = 0; return $script:sdkVersion }
+        function Push-Location { }
+        function Pop-Location { }
+        function New-Item { }
+        & ([scriptblock]::Create($preflight))
+        $script:sdkVersion = '3.38.9'
+        Expect-Failure { & ([scriptblock]::Create($preflight)) }
+        $script:hasFvmrc = $true
+        Expect-Failure { & ([scriptblock]::Create($preflight)) }
+        $script:sdkVersion = '3.41.9'
+        & ([scriptblock]::Create($preflight))
+        $script:hasFvmrc = $false
+        $env:PROJECT = 'self-checkout'
+        Expect-Failure { & ([scriptblock]::Create($preflight)) }
+        $env:PROJECT = ''
+    }
     # Updating a job must preserve unrelated properties and replace old parameters.
     & {
         $env:JENKINS_USER = 'offline-test'; $env:JENKINS_API_TOKEN = 'offline-test'

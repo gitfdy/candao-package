@@ -10,7 +10,7 @@
 
 默认从上述本机仓库当前检出的提交复制到 Jenkins 独立工作区；也可指定仓库与分支。未提交的本机改动不进入构建。每次构建打印 Git SHA；产物带任务号和 SHA 归档，并计算 SHA-256。
 
-TOA POS 开发工作区当前未提交的 `.fvmrc` 与仓库提交不同。Jenkins 以已提交的 `3.41.9` 为准，使用独立 SDK。
+TOA POS Windows 使用独立 Flutter 3.41.9 SDK。源码提交含 `.fvmrc` 时严格核对版本；旧分支未提交该文件时，使用已配置的 3.41.9 并记录日志，不读取开发工作区的未提交配置。
 
 这些任务默认只构建；可独立开启 DUFS 上传与钉钉通知。不调用 TestFlight、Shorebird release/patch 或 OSS latest 更新入口。生产环境的“仅构建”产物仍须检查签名和包内环境后才能发布。部分项目的当前 Android 配置使用 debug 签名，不能直接当正式发布包。
 
@@ -51,3 +51,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\test-options.ps1
 # 仅输出配置 XML 供审阅；不要求 Jenkins 凭据
 powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\sync-jobs.ps1 -OutputDirectory "$env:TEMP\candao-jenkins-preview"
 ```
+
+## TOA POS Windows 试跑
+
+进入 `Candao-Windows-Package` → Build with Parameters：
+
+- `PROJECT` 选择 `toa-pos`。
+- `ENVIRONMENT` 选择 `test-prod`（测试生产）；正式环境选 `release`。TOA 不支持 `qc`。
+- 仓库与分支留空时，使用 Windows 节点 TOA 仓库的当前已提交版本。需要远端分支时填写 `BRANCH` 或同时指定 `REPOSITORY_URL`。
+- 首次试跑保持 `UPLOAD_DUFS=false`、`SEND_DINGTALK=false`；`PRODUCT` 对 TOA 无效。
+
+当前节点 TOA 仓库的未提交改动不会带入构建。构建成功后在 Jenkins Artifacts 下载 EXE。

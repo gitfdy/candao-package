@@ -69,7 +69,15 @@ pipeline {
             if (!(Test-Path -LiteralPath "$sdk\\bin\\flutter.bat")) { throw "Flutter SDK missing: $sdk" }
             Push-Location source
             try {
-              $requiredVersion = (Get-Content -LiteralPath '.fvmrc' -Raw | ConvertFrom-Json).flutter
+              if (Test-Path -LiteralPath '.fvmrc') {
+                $requiredVersion = (Get-Content -LiteralPath '.fvmrc' -Raw | ConvertFrom-Json).flutter
+              } elseif ($env:PROJECT -eq 'toa-pos') {
+                # Older TOA branches do not commit FVM metadata; use the configured CI SDK.
+                $requiredVersion = '3.41.9'
+                Write-Output 'No committed .fvmrc; using configured TOA CI SDK 3.41.9'
+              } else {
+                throw 'Source repository must commit .fvmrc'
+              }
               $actualVersion = (& git -C $sdk describe --tags --exact-match).Trim()
               if ($LASTEXITCODE -ne 0 -or $actualVersion -ne $requiredVersion) { throw "Flutter SDK mismatch: required $requiredVersion, found $actualVersion" }
               New-Item -ItemType Directory -Force -Path '.fvm' | Out-Null
