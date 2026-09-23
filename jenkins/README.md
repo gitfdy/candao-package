@@ -18,7 +18,9 @@ Windows 构建机须具备 Inno Setup 6、Visual Studio Windows 构建工具、F
 
 尚未接入 `TAPPO` 与 `tappo_phone`：本机没有这两个源码目录，仓库地址待提供。iOS IPA 需要 macOS Jenkins 节点和签名资料。高层发布脚本有外部副作用，DUFS 与钉钉使用独立凭据和阶段。
 
-三个 Jenkins 任务使用 **Pipeline script from SCM**，从本仓库 `main` 分支读取 `jenkins/*.Jenkinsfile`。构建开始时会再次检出同一仓库，从该提交加载 `jenkins/common.ps1`。当前 Jenkins 使用本机 Git 路径 `D:\work\candao-package`，因为此机器暂时无法连接本仓库的 GitHub `origin`；因此请先提交脚本修改，再运行构建。Jenkins Git 插件的本地仓库检出选项已在运行时启用，并写入 `F:\Jenkins\jenkins.xml` 供服务重启后使用；此选项允许 Jenkins 任务读取本机 Git 目录，应仅给可信用户任务配置权限。同步脚本从当前进程的 `JENKINS_USER`、`JENKINS_API_TOKEN` 环境变量取凭据，不写入仓库。
+三个 Jenkins 任务使用 **Pipeline script from SCM**，直接从 `https://github.com/gitfdy/candao-package.git` 的 `main` 分支读取 `jenkins/*.Jenkinsfile`。构建开始时通过 `checkout scm` 获取辅助脚本。修改提交并推送后，下一次构建会从远端读取，无需先手动更新 `D:\work\candao-package`。增加或修改参数时仍需运行同步脚本，才能在首次构建前更新参数表单。
+
+Windows 的 Jenkins 服务以 LocalSystem 运行。此账号的 Git 已针对 `https://github.com` 配置现有本机代理 `http://127.0.0.1:7897`；不修改系统代理或 TLS 校验。代理进程须可用，否则远端检出会失败。同步脚本默认使用当前仓库的 `origin`，可通过 `-RepositoryUrl` 显式覆盖；不会把开发者远端 URL 内的 HTTP 凭据复制到 Jenkins。Jenkins 登录凭据从当前进程的 `JENKINS_USER`、`JENKINS_API_TOKEN` 读取，不写入仓库。
 
 ## 可配置打包与分发
 
@@ -40,7 +42,7 @@ Windows 构建机须具备 Inno Setup 6、Visual Studio Windows 构建工具、F
 pwsh -NoProfile -File .\jenkins\sync-jobs.ps1
 ```
 
-需要切换到可从 Jenkins 节点访问的远端仓库时，可传入 `-RepositoryUrl`、`-Branch` 和可选的 `-CredentialsId`（Jenkins Git 凭据 ID），例如 `-RepositoryUrl https://github.com/gitfdy/candao-package.git -Branch main`。不要把密码或 Token 写在 URL 中。同步只更新配置，不触发构建、上传或通知。刷新 Jenkins 任务页面，进入“Build with Parameters”检查新字段。
+需要覆盖脚本仓库或分支时，可传入 `-RepositoryUrl`、`-Branch` 和可选的 `-CredentialsId`（Jenkins Git 凭据 ID），例如 `-RepositoryUrl https://github.com/gitfdy/candao-package.git -Branch main`。不要把密码或 Token 写在 URL 中。同步只更新配置，不触发构建、上传或通知。刷新 Jenkins 任务页面，进入“Build with Parameters”检查新字段。
 
 离线验证，不访问外部服务：
 

@@ -23,7 +23,7 @@ try {
         $definition = $xml.SelectSingleNode('//definition')
         Assert ($definition.GetAttribute('class') -eq 'org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition') 'Pipeline must load from Git SCM'
         Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
-        Assert ($definition.scm.userRemoteConfigs.'hudson.plugins.git.UserRemoteConfig'.url -eq (git -C $PSScriptRoot rev-parse --show-toplevel).Trim()) 'Wrong Git repository'
+        Assert ($definition.scm.userRemoteConfigs.'hudson.plugins.git.UserRemoteConfig'.url -eq ((git -C $PSScriptRoot remote get-url origin).Trim() -replace '^(https?://)[^/]*@', '$1')) 'Wrong Git repository'
         $pipeline = Get-Content (Join-Path $PSScriptRoot $definition.scriptPath.Replace('jenkins/', '')) -Raw
         Assert (!$pipeline.Contains('# @include')) 'Unexpanded helper'
         foreach ($match in [regex]::Matches($pipeline, "(?s)powershell '''(.*?)'''")) {
@@ -36,6 +36,10 @@ try {
         Assert ($pipeline.Contains('when { expression { params.UPLOAD_DUFS } }')) 'Missing upload guard'
         Assert ($pipeline.Contains('when { expression { params.SEND_DINGTALK } }')) 'Missing notification guard'
     }
+    & "$PSScriptRoot/sync-jobs.ps1" -RepositoryUrl 'https://example.invalid/package.git' -Branch 'feature/build' -OutputDirectory "$temp/explicit"
+    [xml]$explicit = Get-Content "$temp/explicit/HPOS-Android-Package.xml" -Raw -Encoding UTF8
+    Assert ($explicit.SelectSingleNode('//userRemoteConfigs/*/url').InnerText -eq 'https://example.invalid/package.git') 'Explicit remote ignored'
+    Assert ($explicit.SelectSingleNode('//branches/*/name').InnerText -eq '*/feature/build') 'Explicit branch ignored'
     # Updating a job must preserve unrelated properties and replace old parameters.
     & {
         $env:JENKINS_USER = 'offline-test'; $env:JENKINS_API_TOKEN = 'offline-test'

@@ -9,8 +9,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 if (!$RepositoryUrl) {
-    $RepositoryUrl = (& git -C $PSScriptRoot rev-parse --show-toplevel).Trim()
-    if ($LASTEXITCODE -ne 0) { throw 'Cannot locate pipeline Git repository' }
+    $RepositoryUrl = (& git -C $PSScriptRoot remote get-url origin)
+    if ($LASTEXITCODE -ne 0 -or !$RepositoryUrl) { throw 'Cannot resolve origin; specify RepositoryUrl' }
+    # Jenkins credentials must not be copied from a developer remote URL.
+    $RepositoryUrl = $RepositoryUrl.Trim() -replace '^(https?://)[^/]*@', '$1'
 }
 if (!$Branch) {
     $Branch = (& git -C $PSScriptRoot branch --show-current).Trim()
