@@ -1,6 +1,7 @@
 pipeline {
   agent any
   options {
+    skipDefaultCheckout(true)
     disableConcurrentBuilds()
     timestamps()
     buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
@@ -26,9 +27,10 @@ pipeline {
     stage('Validate and checkout') {
       steps {
         deleteDir()
+        checkout scm
         powershell '''
           $ErrorActionPreference = 'Stop'
-          # @include common.ps1
+          . "$env:WORKSPACE/jenkins/common.ps1"
           Assert-DeliveryOptions
           $sources = @{
             'queue-screen' = 'D:\\work\\toa-meal-pick-up-screen-flutter'
@@ -155,7 +157,7 @@ pipeline {
         withCredentials([usernamePassword(credentialsId: params.DUFS_CREDENTIALS_ID, usernameVariable: 'DUFS_USER', passwordVariable: 'DUFS_PASSWORD')]) {
           powershell '''
             $ErrorActionPreference = 'Stop'
-            # @include common.ps1
+            . "$env:WORKSPACE/jenkins/common.ps1"
             Publish-Artifacts
           '''
         }
@@ -168,7 +170,7 @@ pipeline {
         withCredentials([string(credentialsId: params.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
           powershell '''
             $ErrorActionPreference = 'Stop'
-            # @include common.ps1
+            . "$env:WORKSPACE/jenkins/common.ps1"
             Send-BuildNotification
           '''
         }

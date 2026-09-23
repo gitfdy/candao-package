@@ -18,7 +18,7 @@ Windows 构建机须具备 Inno Setup 6、Visual Studio Windows 构建工具、F
 
 尚未接入 `TAPPO` 与 `tappo_phone`：本机没有这两个源码目录，仓库地址待提供。iOS IPA 需要 macOS Jenkins 节点和签名资料。高层发布脚本有外部副作用，DUFS 与钉钉使用独立凭据和阶段。
 
-Pipeline 源文件在本目录。Jenkins 任务当前保存的是这些文件的内联副本；修改文件后运行 `sync-jobs.ps1` 同步配置。脚本从当前进程的 `JENKINS_USER`、`JENKINS_API_TOKEN` 环境变量取凭据，不写入仓库。同步时立即注册 Pipeline 参数。
+三个 Jenkins 任务使用 **Pipeline script from SCM**，从本仓库 `main` 分支读取 `jenkins/*.Jenkinsfile`。构建开始时会再次检出同一仓库，从该提交加载 `jenkins/common.ps1`。当前 Jenkins 使用本机 Git 路径 `D:\work\candao-package`，因为此机器暂时无法连接本仓库的 GitHub `origin`；因此请先提交脚本修改，再运行构建。同步脚本从当前进程的 `JENKINS_USER`、`JENKINS_API_TOKEN` 环境变量取凭据，不写入仓库。
 
 ## 可配置打包与分发
 
@@ -32,16 +32,15 @@ Pipeline 源文件在本目录。Jenkins 任务当前保存的是这些文件的
 
 新增仅构建环境：TOA Android 支持 `test-prod/release/debug`，自助 Android 支持 `staging/release`；TOA Windows 支持 `test-prod/release`。其余 Windows 环境保持原范围。`release` 不触发 OSS、Shorebird 或自动更新元数据发布。分支仍须兼容本机 SDK 和构建脚本；自助项目的 `octopus_payment_flutter` 依赖继续取节点本地仓库已提交版本。
 
-`common.ps1` 在同步时嵌入 Pipeline，构建节点不需要另行加载辅助文件。请通过同步脚本部署，不要只复制 `.Jenkinsfile`。同步会同时更新参数定义，无需先跑一次构建即可显示“Build with Parameters”。保留现有任务的其他配置。
+`common.ps1` 随 Jenkinsfile 一起从 Git 检出。`sync-jobs.ps1` 配置三个任务的 Git SCM、Jenkinsfile 路径与参数；同步会立即注册参数，无需先跑一次构建。保留现有任务的其他配置。
 
 在另一台 Windows 构建机的仓库目录更新后执行（当前 PowerShell 会话需已设置 `JENKINS_USER`、`JENKINS_API_TOKEN`）：
 
 ```powershell
-git pull --ff-only
 powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\sync-jobs.ps1
 ```
 
-同步只更新配置，不触发构建、上传或通知。刷新 Jenkins 任务页面，进入“Build with Parameters”检查新字段。
+需要切换到可从 Jenkins 节点访问的远端仓库时，可传入 `-RepositoryUrl`、`-Branch` 和可选的 `-CredentialsId`（Jenkins Git 凭据 ID），例如 `-RepositoryUrl https://github.com/gitfdy/candao-package.git -Branch main`。不要把密码或 Token 写在 URL 中。同步只更新配置，不触发构建、上传或通知。刷新 Jenkins 任务页面，进入“Build with Parameters”检查新字段。
 
 离线验证，不访问外部服务：
 

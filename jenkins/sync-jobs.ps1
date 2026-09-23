@@ -1,10 +1,27 @@
 param(
     [string]$JenkinsUrl = 'http://localhost:8080',
+    [string]$RepositoryUrl,
+    [string]$Branch,
+    [string]$CredentialsId = '',
     # Render XML locally without contacting Jenkins or requiring credentials.
     [string]$OutputDirectory
 )
 
 $ErrorActionPreference = 'Stop'
+if (!$RepositoryUrl) {
+    $RepositoryUrl = (& git -C $PSScriptRoot rev-parse --show-toplevel).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot locate pipeline Git repository' }
+}
+if (!$Branch) {
+    $Branch = (& git -C $PSScriptRoot branch --show-current).Trim()
+    if ($LASTEXITCODE -ne 0 -or !$Branch) { throw 'Cannot determine pipeline Git branch' }
+}
+if ($RepositoryUrl -match '^https?://' -and ([uri]$RepositoryUrl).UserInfo) {
+    throw 'Store Git credentials in Jenkins, not in RepositoryUrl'
+}
+if ($Branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $Branch.Contains('..')) {
+    throw 'Invalid pipeline Git branch'
+}
 $jobs = @{
     'HPOS-Android-Package' = 'hpos.Jenkinsfile'
     'Candao-Windows-Package' = 'windows.Jenkinsfile'
@@ -29,9 +46,7 @@ if (!$OutputDirectory) {
 foreach ($name in $jobs.Keys) {
     $path = Join-Path $PSScriptRoot $jobs[$name]
     $source = Get-Content -LiteralPath $path -Raw -Encoding UTF8
-    # Groovy triple-single-quoted strings still interpret backslash escapes.
-    $common = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'common.ps1') -Raw -Encoding UTF8).Replace('\', '\\').Replace("'", "\'")
-    $script = $source.Replace('# @include common.ps1', $common)
+    if ($source.Contains('# @include common.ps1')) { throw "Unresolved include in $path" }
     $jobUrl = "$JenkinsUrl/job/$name/config.xml"
     $existing = $null
     if (!$OutputDirectory) {
@@ -42,14 +57,31 @@ foreach ($name in $jobs.Keys) {
         }
     }
     if ($existing) {
-        [xml]$xml = $existing
-        if (!$xml.SelectSingleNode('/flow-definition/definition/script')) { throw "Cannot locate inline Pipeline script in $name" }
+        [xml]$xml = ($existing -replace '^<\?xml version="1[.]1"', '<?xml version="1.0"')
+        if (!$xml.SelectSingleNode('/flow-definition/definition')) { throw "Cannot locate Pipeline definition in $name" }
         $destination = $jobUrl
     } else {
-        [xml]$xml = '<flow-definition plugin="workflow-job"><description>Configurable package build, archive and optional distribution.</description><keepDependencies>false</keepDependencies><properties/><definition class="org.jenkinsci.plugins.workflow.cps.CpsFlowDefinition" plugin="workflow-cps"><script/><sandbox>true</sandbox></definition><triggers/><disabled>false</disabled></flow-definition>'
+        [xml]$xml = '<flow-definition plugin="workflow-job"><description>Configurable package build, archive and optional distribution.</description><keepDependencies>false</keepDependencies><properties/><definition/><triggers/><disabled>false</disabled></flow-definition>'
         $destination = "$JenkinsUrl/createItem?name=$name"
     }
-    $xml.SelectSingleNode('/flow-definition/definition/script').InnerText = $script
+    $oldDefinition = $xml.SelectSingleNode('/flow-definition/definition')
+    $newDefinition = $xml.CreateElement('definition')
+    $newDefinition.SetAttribute('class', 'org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition')
+    $newDefinition.SetAttribute('plugin', 'workflow-cps')
+    $scm = $xml.CreateElement('scm')
+    $scm.SetAttribute('class', 'hudson.plugins.git.GitSCM')
+    $scm.SetAttribute('plugin', 'git')
+    $scm.InnerXml = '<configVersion>2</configVersion><userRemoteConfigs><hudson.plugins.git.UserRemoteConfig><url/><credentialsId/></hudson.plugins.git.UserRemoteConfig></userRemoteConfigs><branches><hudson.plugins.git.BranchSpec><name/></hudson.plugins.git.BranchSpec></branches><doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations><submoduleCfg class="empty-list"/><extensions/>'
+    $scm.SelectSingleNode('userRemoteConfigs/hudson.plugins.git.UserRemoteConfig/url').InnerText = $RepositoryUrl
+    $scm.SelectSingleNode('userRemoteConfigs/hudson.plugins.git.UserRemoteConfig/credentialsId').InnerText = $CredentialsId
+    $scm.SelectSingleNode('branches/hudson.plugins.git.BranchSpec/name').InnerText = "*/$Branch"
+    $newDefinition.AppendChild($scm) | Out-Null
+    foreach ($field in @{ scriptPath = "jenkins/$($jobs[$name])"; lightweight = 'true' }.GetEnumerator()) {
+        $element = $xml.CreateElement($field.Key)
+        $element.InnerText = $field.Value
+        $newDefinition.AppendChild($element) | Out-Null
+    }
+    $xml.DocumentElement.ReplaceChild($newDefinition, $oldDefinition) | Out-Null
     $properties = $xml.SelectSingleNode('/flow-definition/properties')
     if (!$properties) {
         $properties = $xml.CreateElement('properties')

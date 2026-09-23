@@ -1,4 +1,4 @@
-# Embedded by sync-jobs.ps1; no dependency on files on the build node.
+# Loaded from the same Git checkout as the Jenkinsfile.
 function Checkout-Source([string]$DefaultRepo) {
     $repo = $env:REPOSITORY_URL
     $branch = $env:BRANCH

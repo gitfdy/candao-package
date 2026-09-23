@@ -13,14 +13,18 @@ Push-Location $temp
 try {
     & "$PSScriptRoot/sync-jobs.ps1" -OutputDirectory "$temp/xml"
     foreach ($file in Get-ChildItem "$temp/xml/*.xml") {
-        [xml]$xml = Get-Content $file -Raw
+        [xml]$xml = Get-Content $file -Raw -Encoding UTF8
         $parameters = $xml.SelectNodes('//parameterDefinitions/*')
         foreach ($name in @('REPOSITORY_URL', 'BRANCH', 'UPLOAD_DUFS', 'SEND_DINGTALK')) {
             Assert ($name -in $parameters.name) "Missing parameter: $name"
         }
         Assert ($xml.SelectSingleNode("//parameterDefinitions/*[name='UPLOAD_DUFS']/defaultValue").InnerText -eq 'false') 'Upload must default off'
         Assert ($xml.SelectSingleNode("//parameterDefinitions/*[name='SEND_DINGTALK']/defaultValue").InnerText -eq 'false') 'Notification must default off'
-        $pipeline = $xml.SelectSingleNode('//definition/script').InnerText
+        $definition = $xml.SelectSingleNode('//definition')
+        Assert ($definition.GetAttribute('class') -eq 'org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition') 'Pipeline must load from Git SCM'
+        Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
+        Assert ($definition.scm.userRemoteConfigs.'hudson.plugins.git.UserRemoteConfig'.url -eq (git -C $PSScriptRoot rev-parse --show-toplevel).Trim()) 'Wrong Git repository'
+        $pipeline = Get-Content (Join-Path $PSScriptRoot $definition.scriptPath.Replace('jenkins/', '')) -Raw
         Assert (!$pipeline.Contains('# @include')) 'Unexpanded helper'
         foreach ($match in [regex]::Matches($pipeline, "(?s)powershell '''(.*?)'''")) {
             $code = $match.Groups[1].Value.Replace('\\', '\').Replace("\'", "'")
@@ -109,7 +113,7 @@ try {
     Send-BuildNotification
     $script:errcode = 310000
     Expect-Failure { Send-BuildNotification }
-    Write-Output 'PASS: parameter XML, embedded syntax, branch selection, upload checksum and notification errors'
+    Write-Output 'PASS: SCM configuration, Pipeline syntax, branch selection, upload checksum and notification errors'
 } finally {
     Pop-Location
     Remove-Item -LiteralPath $temp -Recurse -Force
