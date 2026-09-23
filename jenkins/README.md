@@ -37,7 +37,7 @@ Windows 构建机须具备 Inno Setup 6、Visual Studio Windows 构建工具、F
 在另一台 Windows 构建机的仓库目录更新后执行（当前 PowerShell 会话需已设置 `JENKINS_USER`、`JENKINS_API_TOKEN`）：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\sync-jobs.ps1
+pwsh -NoProfile -File .\jenkins\sync-jobs.ps1
 ```
 
 需要切换到可从 Jenkins 节点访问的远端仓库时，可传入 `-RepositoryUrl`、`-Branch` 和可选的 `-CredentialsId`（Jenkins Git 凭据 ID），例如 `-RepositoryUrl https://github.com/gitfdy/candao-package.git -Branch main`。不要把密码或 Token 写在 URL 中。同步只更新配置，不触发构建、上传或通知。刷新 Jenkins 任务页面，进入“Build with Parameters”检查新字段。
@@ -47,5 +47,5 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\sync-jobs.ps1
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\test-options.ps1
 # 仅输出配置 XML 供审阅；不要求 Jenkins 凭据
-powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\sync-jobs.ps1 -OutputDirectory "$env:TEMP\candao-jenkins-preview"
+pwsh -NoProfile -File .\jenkins\sync-jobs.ps1 -OutputDirectory "$env:TEMP\candao-jenkins-preview"
 ```
