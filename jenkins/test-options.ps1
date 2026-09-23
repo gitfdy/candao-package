@@ -49,6 +49,26 @@ try {
     Assert ($explicit.SelectSingleNode('//branches/*/name').InnerText -eq '*/feature/build') 'Explicit branch ignored'
     # Execute the real Windows preflight with filesystem/SDK probes mocked.
     $windowsPipeline = Get-Content "$PSScriptRoot/windows.Jenkinsfile" -Raw -Encoding UTF8
+    # Both TOA and self-checkout need the sibling package in the clean workspace.
+    foreach ($platform in @('windows', 'android')) {
+        $pipeline = Get-Content "$PSScriptRoot/$platform.Jenkinsfile" -Raw -Encoding UTF8
+        $dependency = [regex]::Match($pipeline, '(?s)if \(\$env:PROJECT[^\r\n]+\) \{\s+git clone.*?\n          \}').Value.Replace('\\', '\')
+        Assert ($dependency.Length -gt 0) 'Dependency checkout not found'
+        & {
+            function git { $script:gitCalls++; $global:LASTEXITCODE = 0 }
+            foreach ($project in @('toa-pos', 'self-checkout', 'queue-screen')) {
+                $env:PROJECT = $project
+                $script:gitCalls = 0
+                & ([scriptblock]::Create($dependency))
+                $expected = if ($project -eq 'queue-screen') { 0 } else { 2 }
+                Assert ($script:gitCalls -eq $expected) "Wrong dependency checkout for $platform / $project"
+            }
+            function git { $global:LASTEXITCODE = 1 }
+            $env:PROJECT = 'toa-pos'
+            Expect-Failure { & ([scriptblock]::Create($dependency)) }
+            $env:PROJECT = ''
+        }
+    }
     $preflight = [regex]::Match($windowsPipeline, "(?s)stage\('Preflight'\).*?powershell '''(.*?)'''").Groups[1].Value.Replace('\\', '\')
     Assert ($preflight.Length -gt 0) 'Windows preflight not found'
     & {

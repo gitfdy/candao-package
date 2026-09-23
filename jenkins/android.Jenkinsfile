@@ -41,7 +41,7 @@ pipeline {
           $allowed = @{ 'toa-pos' = @('test-prod', 'release', 'debug'); 'self-checkout' = @('staging', 'release') }
           if ($env:ENVIRONMENT -notin $allowed[$env:PROJECT]) { throw 'Unsupported project/environment pair' }
           Checkout-Source $repo
-          if ($env:PROJECT -eq 'self-checkout') {
+          if ($env:PROJECT -in @('self-checkout', 'toa-pos')) {
             git clone --local --no-hardlinks -- 'D:\\work\\octopus_payment_flutter' octopus_payment_flutter
             if ($LASTEXITCODE -ne 0) { throw 'Octopus dependency clone failed' }
             git -C octopus_payment_flutter rev-parse HEAD
