@@ -30,8 +30,8 @@ Windows 的 Jenkins 服务以 LocalSystem 运行。此账号的 Git 已针对 `h
 - `REPOSITORY_URL`：源码 Git URL 或构建节点本地路径。留空沿用上表本地仓库。
 - `BRANCH`：分支名，例如 `main`、`feature/example`。填写后获取该分支；仓库地址留空时，从本地仓库的 `origin` 获取最新分支。两项都留空保持原有行为，复制本地仓库当前已提交版本。填写 URL、分支留空则使用该仓库默认分支。私有 Git 认证使用构建节点现有配置，不要在 URL 内填写密码或 Token。
 - HPOS 的环境使用 `BUILD_TYPE`；另外两个任务使用 `ENVIRONMENT`。不支持的项目／环境组合在下载和构建前报错。
-- `UPLOAD_DUFS`：默认关闭。开启时填写 `DUFS_URL` 目标目录和 `DUFS_CREDENTIALS_ID`，后者引用 Jenkins 的 Username with password 凭据（默认 ID `dufs`）。目标目录须已存在且可写。先归档，再上传；回读 SHA-256 一致才记为上传成功。
-- `SEND_DINGTALK`：默认关闭。独立控制成功通知，可在不上传时发送 Jenkins 产物入口。`DINGTALK_CREDENTIALS_ID` 引用 Secret text 凭据（默认 ID `dingtalk-webhook`），内容为机器人完整 Webhook。机器人需允许关键词 `Candao` 或构建节点 IP；当前不支持机器人加签。上传开启但失败时任务失败，不发送成功通知。
+- `UPLOAD_DUFS`：默认关闭。TOA Windows 已预填 `DUFS_URL=http://192.168.225.46:5000/dufs/TOA-POS-Windows`（取自 `devlop_qc` 构建脚本），其他任务开启时填写目标目录。流水线固定引用 Jenkins 的 Username with password 凭据 `dufs`，不再要求在构建表单填写凭据 ID。目标目录须已存在且可写。先归档，再上传；回读 SHA-256 一致才记为上传成功。
+- `SEND_DINGTALK`：默认关闭。独立控制成功通知，可在不上传时发送 Jenkins 产物入口。流水线固定引用 Secret text 凭据 `dingtalk-webhook`，不再显示凭据 ID 输入框，内容为机器人完整 Webhook。消息包含原 TOA 机器人要求的关键词 `push`，并保留 `Candao`；机器人需允许对应关键词或构建节点 IP；当前不支持机器人加签。上传开启但失败时任务失败，不发送成功通知。
 
 新增仅构建环境：TOA Android 支持 `test-prod/release/debug`，自助 Android 支持 `staging/release`；TOA Windows 仅支持 `test-prod`。其余 Windows 环境保持原范围。`release` 不触发 OSS、Shorebird 或自动更新元数据发布。分支仍须兼容本机 SDK 和构建脚本；自助项目的 `octopus_payment_flutter` 依赖继续取节点本地仓库已提交版本。
 

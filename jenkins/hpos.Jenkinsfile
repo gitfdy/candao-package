@@ -11,12 +11,12 @@ pipeline {
     string(name: 'BRANCH', defaultValue: '', description: '分支名（如 main）；指定时从远端获取，留空使用仓库默认分支', trim: true)
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
     string(name: 'DUFS_URL', defaultValue: '', description: 'DUFS 目标目录完整 URL；开启上传时必填', trim: true)
-    string(name: 'DUFS_CREDENTIALS_ID', defaultValue: 'dufs', description: 'Jenkins 用户名密码凭据 ID', trim: true)
     booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知；可独立于 DUFS 开启')
-    string(name: 'DINGTALK_CREDENTIALS_ID', defaultValue: 'dingtalk-webhook', description: 'Jenkins Secret text 凭据 ID，内容为机器人完整 Webhook', trim: true)
     choice(name: 'BUILD_TYPE', choices: ['test-prod', 'pre-prod', 'release', 'debug'], description: 'Application environment and Flutter build mode')
   }
   environment {
+    DUFS_CREDENTIALS_ID = 'dufs'
+    DINGTALK_CREDENTIALS_ID = 'dingtalk-webhook'
     SOURCE_REPO = 'D:\\work\\flutter-hpos'
     FLUTTER_STORAGE_BASE_URL = 'https://storage.flutter-io.cn'
     PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
@@ -106,7 +106,7 @@ pipeline {
     stage('Upload DUFS') {
       when { expression { params.UPLOAD_DUFS } }
       steps {
-        withCredentials([usernamePassword(credentialsId: params.DUFS_CREDENTIALS_ID, usernameVariable: 'DUFS_USER', passwordVariable: 'DUFS_PASSWORD')]) {
+        withCredentials([usernamePassword(credentialsId: env.DUFS_CREDENTIALS_ID, usernameVariable: 'DUFS_USER', passwordVariable: 'DUFS_PASSWORD')]) {
           powershell '''
             $ErrorActionPreference = 'Stop'
             . "$env:WORKSPACE/jenkins/common.ps1"
@@ -119,7 +119,7 @@ pipeline {
     stage('Notify DingTalk') {
       when { expression { params.SEND_DINGTALK } }
       steps {
-        withCredentials([string(credentialsId: params.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
+        withCredentials([string(credentialsId: env.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
           powershell '''
             $ErrorActionPreference = 'Stop'
             . "$env:WORKSPACE/jenkins/common.ps1"

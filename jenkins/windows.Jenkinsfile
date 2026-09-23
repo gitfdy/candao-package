@@ -7,6 +7,8 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
   }
   environment {
+    DUFS_CREDENTIALS_ID = 'dufs'
+    DINGTALK_CREDENTIALS_ID = 'dingtalk-webhook'
     FLUTTER_STORAGE_BASE_URL = 'https://storage.flutter-io.cn'
     PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
     PUB_CACHE = 'C:\\Users\\Administrator\\AppData\\Local\\Pub\\Cache'
@@ -15,10 +17,8 @@ pipeline {
     string(name: 'REPOSITORY_URL', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'D:/work/toa-pos-flutter' : '', description: '源码仓库 URL 或节点本地路径；指定本地路径时读取该仓库已提交代码', trim: true)
     string(name: 'BRANCH', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'devlop_qc' : '', description: 'TOA QC 分支为 devlop_qc；按指定仓库获取分支，留空使用仓库默认分支', trim: true)
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
-    string(name: 'DUFS_URL', defaultValue: '', description: 'DUFS 目标目录完整 URL；开启上传时必填', trim: true)
-    string(name: 'DUFS_CREDENTIALS_ID', defaultValue: 'dufs', description: 'Jenkins 用户名密码凭据 ID', trim: true)
+    string(name: 'DUFS_URL', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'http://192.168.225.46:5000/dufs/TOA-POS-Windows' : '', description: 'DUFS 目标目录完整 URL；TOA Windows 已预填，其他项目开启上传时填写', trim: true)
     booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知；可独立于 DUFS 开启')
-    string(name: 'DINGTALK_CREDENTIALS_ID', defaultValue: 'dingtalk-webhook', description: 'Jenkins Secret text 凭据 ID，内容为机器人完整 Webhook', trim: true)
     choice(name: 'PROJECT', choices: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? ['toa-pos'] : ['queue-screen', 'self-checkout', 'toa-pos'], description: 'Windows application')
     choice(name: 'ENVIRONMENT', choices: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? ['test-prod'] : ['qc', 'release', 'staging', 'test-prod'], description: 'TOA QC 使用 test-prod；Git 分支与构建环境是不同参数')
     choice(name: 'PRODUCT', choices: ['self_checkout', 'kiosk'], description: 'Used by self-checkout only')
@@ -165,7 +165,7 @@ pipeline {
     stage('Upload DUFS') {
       when { expression { params.UPLOAD_DUFS } }
       steps {
-        withCredentials([usernamePassword(credentialsId: params.DUFS_CREDENTIALS_ID, usernameVariable: 'DUFS_USER', passwordVariable: 'DUFS_PASSWORD')]) {
+        withCredentials([usernamePassword(credentialsId: env.DUFS_CREDENTIALS_ID, usernameVariable: 'DUFS_USER', passwordVariable: 'DUFS_PASSWORD')]) {
           powershell '''
             $ErrorActionPreference = 'Stop'
             . "$env:WORKSPACE/jenkins/common.ps1"
@@ -178,7 +178,7 @@ pipeline {
     stage('Notify DingTalk') {
       when { expression { params.SEND_DINGTALK } }
       steps {
-        withCredentials([string(credentialsId: params.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
+        withCredentials([string(credentialsId: env.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
           powershell '''
             $ErrorActionPreference = 'Stop'
             . "$env:WORKSPACE/jenkins/common.ps1"

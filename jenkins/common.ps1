@@ -77,7 +77,7 @@ function Send-BuildNotification {
     $sha = (& git -C source rev-parse HEAD)
     if ($LASTEXITCODE -ne 0) { throw 'Git revision lookup failed' }
     $buildEnvironment = if ($env:BUILD_TYPE) { $env:BUILD_TYPE } else { $env:ENVIRONMENT }
-    $content = "Candao build completed: $env:JOB_NAME #$env:BUILD_NUMBER`nEnvironment: $buildEnvironment`nBranch: $env:BRANCH`nCommit: $sha`n$env:BUILD_URL`n$links"
+    $content = "Candao push build completed: $env:JOB_NAME #$env:BUILD_NUMBER`nEnvironment: $buildEnvironment`nBranch: $env:BRANCH`nCommit: $sha`n$env:BUILD_URL`n$links"
     $body = @{ msgtype = 'text'; text = @{ content = $content } } | ConvertTo-Json -Depth 3
     # Do not expose the webhook (including its token) in an HTTP exception.
     try {

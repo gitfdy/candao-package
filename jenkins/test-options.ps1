@@ -20,6 +20,9 @@ try {
         }
         Assert ($xml.SelectSingleNode("//parameterDefinitions/*[name='UPLOAD_DUFS']/defaultValue").InnerText -eq 'false') 'Upload must default off'
         Assert ($xml.SelectSingleNode("//parameterDefinitions/*[name='SEND_DINGTALK']/defaultValue").InnerText -eq 'false') 'Notification must default off'
+        foreach ($name in @('DUFS_CREDENTIALS_ID', 'DINGTALK_CREDENTIALS_ID')) {
+            Assert ($name -notin $parameters.name) 'Credential IDs must not be build parameters'
+        }
         $definition = $xml.SelectSingleNode('//definition')
         Assert ($definition.GetAttribute('class') -eq 'org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition') 'Pipeline must load from Git SCM'
         Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('TOA-POS-Windows-Package', 'windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
@@ -35,8 +38,13 @@ try {
         Assert ($pipeline.IndexOf("stage('Verify and archive')") -lt $pipeline.IndexOf("stage('Upload DUFS')")) 'Archive before upload'
         Assert ($pipeline.Contains('when { expression { params.UPLOAD_DUFS } }')) 'Missing upload guard'
         Assert ($pipeline.Contains('when { expression { params.SEND_DINGTALK } }')) 'Missing notification guard'
+        Assert ($pipeline.Contains("DUFS_CREDENTIALS_ID = 'dufs'")) 'Missing fixed DUFS credential'
+        Assert ($pipeline.Contains("DINGTALK_CREDENTIALS_ID = 'dingtalk-webhook'")) 'Missing fixed DingTalk credential'
+        Assert ($pipeline.Contains('credentialsId: env.DUFS_CREDENTIALS_ID')) 'DUFS binding must use configured credential'
+        Assert ($pipeline.Contains('credentialsId: env.DINGTALK_CREDENTIALS_ID')) 'DingTalk binding must use configured credential'
     }
     [xml]$toa = Get-Content "$temp/xml/TOA-POS-Windows-Package.xml" -Raw -Encoding UTF8
+    Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='DUFS_URL']/defaultValue").InnerText -eq 'http://192.168.225.46:5000/dufs/TOA-POS-Windows') 'TOA upload directory must match its QC build script'
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='BRANCH']/defaultValue").InnerText -eq 'devlop_qc') 'TOA must default to the QC branch'
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='REPOSITORY_URL']/defaultValue").InnerText -eq 'D:/work/toa-pos-flutter') 'Wrong TOA source repository'
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='PROJECT']/choices/a").InnerText -eq 'toa-pos') 'TOA task must exclude queue-screen'
@@ -167,6 +175,7 @@ try {
     function Invoke-RestMethod {
         param($Method, $Uri, $ContentType, $Body, $TimeoutSec, $MaximumRedirection)
         $payload = [Text.Encoding]::UTF8.GetString($Body) | ConvertFrom-Json
+        Assert ($payload.text.content.Contains('push')) 'TOA robot requires the push keyword'
         Assert ($payload.text.content.Contains('DUFS upload disabled')) 'Independent notification missing'
         return @{ errcode = $script:errcode }
     }
