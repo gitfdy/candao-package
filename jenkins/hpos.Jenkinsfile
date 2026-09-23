@@ -6,6 +6,13 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
   }
   parameters {
+    string(name: 'REPOSITORY_URL', defaultValue: '', description: '源码仓库 URL 或节点本地路径；留空沿用项目本地仓库', trim: true)
+    string(name: 'BRANCH', defaultValue: '', description: '分支名（如 main）；指定时从远端获取，留空使用仓库默认分支', trim: true)
+    booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
+    string(name: 'DUFS_URL', defaultValue: '', description: 'DUFS 目标目录完整 URL；开启上传时必填', trim: true)
+    string(name: 'DUFS_CREDENTIALS_ID', defaultValue: 'dufs', description: 'Jenkins 用户名密码凭据 ID', trim: true)
+    booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知；可独立于 DUFS 开启', trim: true)
+    string(name: 'DINGTALK_CREDENTIALS_ID', defaultValue: 'dingtalk-webhook', description: 'Jenkins Secret text 凭据 ID，内容为机器人完整 Webhook', trim: true)
     choice(name: 'BUILD_TYPE', choices: ['test-prod', 'pre-prod', 'release', 'debug'], description: 'Application environment and Flutter build mode')
   }
   environment {
@@ -21,11 +28,9 @@ pipeline {
         deleteDir()
         powershell '''
           $ErrorActionPreference = 'Stop'
-          if (!(Test-Path -LiteralPath "$env:SOURCE_REPO\\.git")) { throw "Missing source repository: $env:SOURCE_REPO" }
-          git clone --local --no-hardlinks -- "$env:SOURCE_REPO" source
-          if ($LASTEXITCODE -ne 0) { throw 'Git clone failed' }
-          git -C source rev-parse HEAD
-          if ($LASTEXITCODE -ne 0) { throw 'Git revision lookup failed' }
+          # @include common.ps1
+          Assert-DeliveryOptions
+          Checkout-Source $env:SOURCE_REPO
         '''
       }
     }
@@ -94,6 +99,31 @@ pipeline {
           Get-FileHash -Algorithm SHA256 -LiteralPath $target | Format-List
         '''
         archiveArtifacts artifacts: 'artifacts/*.apk', fingerprint: true
+      }
+    }
+    stage('Upload DUFS') {
+      when { expression { params.UPLOAD_DUFS } }
+      steps {
+        withCredentials([usernamePassword(credentialsId: params.DUFS_CREDENTIALS_ID, usernameVariable: 'DUFS_USER', passwordVariable: 'DUFS_PASSWORD')]) {
+          powershell '''
+            $ErrorActionPreference = 'Stop'
+            # @include common.ps1
+            Publish-Artifacts
+          '''
+        }
+        archiveArtifacts artifacts: 'dufs-links.txt'
+      }
+    }
+    stage('Notify DingTalk') {
+      when { expression { params.SEND_DINGTALK } }
+      steps {
+        withCredentials([string(credentialsId: params.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
+          powershell '''
+            $ErrorActionPreference = 'Stop'
+            # @include common.ps1
+            Send-BuildNotification
+          '''
+        }
       }
     }
   }

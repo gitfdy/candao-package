@@ -11,6 +11,13 @@ pipeline {
     PUB_CACHE = 'C:\\Users\\Administrator\\AppData\\Local\\Pub\\Cache'
   }
   parameters {
+    string(name: 'REPOSITORY_URL', defaultValue: '', description: '源码仓库 URL 或节点本地路径；留空沿用项目本地仓库', trim: true)
+    string(name: 'BRANCH', defaultValue: '', description: '分支名（如 main）；指定时从远端获取，留空使用仓库默认分支', trim: true)
+    booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
+    string(name: 'DUFS_URL', defaultValue: '', description: 'DUFS 目标目录完整 URL；开启上传时必填', trim: true)
+    string(name: 'DUFS_CREDENTIALS_ID', defaultValue: 'dufs', description: 'Jenkins 用户名密码凭据 ID', trim: true)
+    booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知；可独立于 DUFS 开启', trim: true)
+    string(name: 'DINGTALK_CREDENTIALS_ID', defaultValue: 'dingtalk-webhook', description: 'Jenkins Secret text 凭据 ID，内容为机器人完整 Webhook', trim: true)
     choice(name: 'PROJECT', choices: ['queue-screen', 'self-checkout', 'toa-pos'], description: 'Windows application')
     choice(name: 'ENVIRONMENT', choices: ['qc', 'release', 'staging', 'test-prod'], description: 'Allowed values depend on the project')
     choice(name: 'PRODUCT', choices: ['self_checkout', 'kiosk'], description: 'Used by self-checkout only')
@@ -21,6 +28,8 @@ pipeline {
         deleteDir()
         powershell '''
           $ErrorActionPreference = 'Stop'
+          # @include common.ps1
+          Assert-DeliveryOptions
           $sources = @{
             'queue-screen' = 'D:\\work\\toa-meal-pick-up-screen-flutter'
             'self-checkout' = 'D:\\work\\self-checkout'
@@ -29,17 +38,13 @@ pipeline {
           $allowed = @{
             'queue-screen' = @('qc', 'release')
             'self-checkout' = @('staging', 'release')
-            'toa-pos' = @('test-prod')
+            'toa-pos' = @('test-prod', 'release')
           }
           if (!$sources.ContainsKey($env:PROJECT) -or $env:ENVIRONMENT -notin $allowed[$env:PROJECT]) {
             throw "Unsupported project/environment pair: $env:PROJECT / $env:ENVIRONMENT"
           }
           $repo = $sources[$env:PROJECT]
-          if (!(Test-Path -LiteralPath "$repo\\.git")) { throw "Missing source repository: $repo" }
-          git clone --local --no-hardlinks -- $repo source
-          if ($LASTEXITCODE -ne 0) { throw 'Git clone failed' }
-          git -C source rev-parse HEAD
-          if ($LASTEXITCODE -ne 0) { throw 'Git revision lookup failed' }
+          Checkout-Source $repo
           if ($env:PROJECT -eq 'self-checkout') {
             git clone --local --no-hardlinks -- 'D:\\work\\octopus_payment_flutter' octopus_payment_flutter
             if ($LASTEXITCODE -ne 0) { throw 'Octopus dependency clone failed' }
@@ -107,7 +112,7 @@ pipeline {
                 & .\\scripts\\build_windows.bat --product $env:PRODUCT --type $env:ENVIRONMENT --local true
               }
               'toa-pos' {
-                & .\\scripts\\build_windows.bat --type test-prod --proxy none --local true
+                & .\\scripts\\build_windows.bat --type $env:ENVIRONMENT --proxy none --local true
               }
             }
             if ($LASTEXITCODE -ne 0) { throw "Installer build failed: $LASTEXITCODE" }
@@ -142,6 +147,31 @@ pipeline {
           }
         '''
         archiveArtifacts artifacts: 'artifacts/*.exe', fingerprint: true
+      }
+    }
+    stage('Upload DUFS') {
+      when { expression { params.UPLOAD_DUFS } }
+      steps {
+        withCredentials([usernamePassword(credentialsId: params.DUFS_CREDENTIALS_ID, usernameVariable: 'DUFS_USER', passwordVariable: 'DUFS_PASSWORD')]) {
+          powershell '''
+            $ErrorActionPreference = 'Stop'
+            # @include common.ps1
+            Publish-Artifacts
+          '''
+        }
+        archiveArtifacts artifacts: 'dufs-links.txt'
+      }
+    }
+    stage('Notify DingTalk') {
+      when { expression { params.SEND_DINGTALK } }
+      steps {
+        withCredentials([string(credentialsId: params.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
+          powershell '''
+            $ErrorActionPreference = 'Stop'
+            # @include common.ps1
+            Send-BuildNotification
+          '''
+        }
       }
     }
   }

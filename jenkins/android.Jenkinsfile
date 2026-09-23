@@ -6,6 +6,14 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
   }
   parameters {
+    string(name: 'REPOSITORY_URL', defaultValue: '', description: '源码仓库 URL 或节点本地路径；留空沿用项目本地仓库', trim: true)
+    string(name: 'BRANCH', defaultValue: '', description: '分支名（如 main）；指定时从远端获取，留空使用仓库默认分支', trim: true)
+    booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
+    string(name: 'DUFS_URL', defaultValue: '', description: 'DUFS 目标目录完整 URL；开启上传时必填', trim: true)
+    string(name: 'DUFS_CREDENTIALS_ID', defaultValue: 'dufs', description: 'Jenkins 用户名密码凭据 ID', trim: true)
+    booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知；可独立于 DUFS 开启', trim: true)
+    string(name: 'DINGTALK_CREDENTIALS_ID', defaultValue: 'dingtalk-webhook', description: 'Jenkins Secret text 凭据 ID，内容为机器人完整 Webhook', trim: true)
+    choice(name: 'ENVIRONMENT', choices: ['test-prod', 'staging', 'release', 'debug'], description: 'TOA: test-prod/release/debug；自助: staging/release')
     choice(name: 'PROJECT', choices: ['toa-pos', 'self-checkout'], description: 'Android application')
     choice(name: 'PRODUCT', choices: ['self_checkout', 'kiosk'], description: 'Used by self-checkout only')
   }
@@ -21,15 +29,16 @@ pipeline {
         deleteDir()
         powershell '''
           $ErrorActionPreference = 'Stop'
+          # @include common.ps1
+          Assert-DeliveryOptions
           $repo = switch ($env:PROJECT) {
             'toa-pos' { 'D:\\work\\toa-pos-flutter' }
             'self-checkout' { 'D:\\work\\self-checkout' }
             default { throw "Unsupported project: $env:PROJECT" }
           }
-          if (!(Test-Path -LiteralPath "$repo\\.git")) { throw "Missing source repository: $repo" }
-          git clone --local --no-hardlinks -- $repo source
-          if ($LASTEXITCODE -ne 0) { throw 'Git clone failed' }
-          git -C source rev-parse HEAD
+          $allowed = @{ 'toa-pos' = @('test-prod', 'release', 'debug'); 'self-checkout' = @('staging', 'release') }
+          if ($env:ENVIRONMENT -notin $allowed[$env:PROJECT]) { throw 'Unsupported project/environment pair' }
+          Checkout-Source $repo
           if ($env:PROJECT -eq 'self-checkout') {
             git clone --local --no-hardlinks -- 'D:\\work\\octopus_payment_flutter' octopus_payment_flutter
             if ($LASTEXITCODE -ne 0) { throw 'Octopus dependency clone failed' }
@@ -95,17 +104,24 @@ pipeline {
             }
             & $flutter pub get
             if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed' }
-            $args = @('build', 'apk', '--release')
+            $mode = if ($env:ENVIRONMENT -eq 'debug') { '--debug' } else { '--release' }
+            $args = @('build', 'apk', $mode)
             if ($env:PROJECT -eq 'toa-pos') {
               $dart = '.\\.fvm\\flutter_sdk\\bin\\cache\\dart-sdk\\bin\\dart.exe'
-              $manifest = (& $dart scripts/generate_incident_build_manifest.dart --platform android --abi universal --build-type test-prod | Select-Object -Last 1).Trim()
+              $manifest = (& $dart scripts/generate_incident_build_manifest.dart --platform android --abi universal --build-type $env:ENVIRONMENT | Select-Object -Last 1).Trim()
               if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($manifest)) { throw 'Incident build manifest generation failed' }
-              $configUrl = 'https://tappo.oss-cn-hongkong.aliyuncs.com/toa-pos/test-production/android/latest.json'
-              $args += @('--dart-define=test_production=true', "--dart-define=version_config_url=$configUrl", "--dart-define=TOA_INCIDENT_BUILD_MANIFEST_B64=$manifest")
+              $args += "--dart-define=TOA_INCIDENT_BUILD_MANIFEST_B64=$manifest"
+              if ($env:ENVIRONMENT -ne 'debug') {
+                $channel = if ($env:ENVIRONMENT -eq 'test-prod') { 'test-production' } else { 'production' }
+                $configUrl = "https://tappo.oss-cn-hongkong.aliyuncs.com/toa-pos/$channel/android/latest.json"
+                $args += "--dart-define=version_config_url=$configUrl"
+              }
+              if ($env:ENVIRONMENT -eq 'test-prod') { $args += '--dart-define=test_production=true' }
             } else {
               $flavor = if ($env:PRODUCT -eq 'kiosk') { 'kiosk' } else { 'selfCheckout' }
               $productType = if ($env:PRODUCT -eq 'kiosk') { 'kiosk' } else { 'self_checkout' }
-              $args += @('--flavor', $flavor, "--dart-define=product_type=$productType", '--dart-define=app_env=staging')
+              $appEnv = if ($env:ENVIRONMENT -eq 'release') { 'prod' } else { 'staging' }
+              $args += @('--flavor', $flavor, "--dart-define=product_type=$productType", "--dart-define=app_env=$appEnv")
             }
             & $flutter @args
             if ($LASTEXITCODE -ne 0) { throw 'Flutter APK build failed' }
@@ -124,11 +140,36 @@ pipeline {
           if ($outputs.Count -ne 1) { throw "Expected one fresh APK, found $($outputs.Count)" }
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
           $sha = (git -C source rev-parse --short=12 HEAD).Trim()
-          $target = "artifacts\\${env:PROJECT}_${env:PRODUCT}_${sha}_${env:BUILD_NUMBER}.apk"
+          $target = "artifacts\\${env:PROJECT}_${env:PRODUCT}_${env:ENVIRONMENT}_${sha}_${env:BUILD_NUMBER}.apk"
           Copy-Item -LiteralPath $outputs[0].FullName -Destination $target
           Get-FileHash -Algorithm SHA256 -LiteralPath $target | Format-List
         '''
         archiveArtifacts artifacts: 'artifacts/*.apk', fingerprint: true
+      }
+    }
+    stage('Upload DUFS') {
+      when { expression { params.UPLOAD_DUFS } }
+      steps {
+        withCredentials([usernamePassword(credentialsId: params.DUFS_CREDENTIALS_ID, usernameVariable: 'DUFS_USER', passwordVariable: 'DUFS_PASSWORD')]) {
+          powershell '''
+            $ErrorActionPreference = 'Stop'
+            # @include common.ps1
+            Publish-Artifacts
+          '''
+        }
+        archiveArtifacts artifacts: 'dufs-links.txt'
+      }
+    }
+    stage('Notify DingTalk') {
+      when { expression { params.SEND_DINGTALK } }
+      steps {
+        withCredentials([string(credentialsId: params.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
+          powershell '''
+            $ErrorActionPreference = 'Stop'
+            # @include common.ps1
+            Send-BuildNotification
+          '''
+        }
       }
     }
   }
