@@ -18,7 +18,7 @@ Windows 构建机须具备 Inno Setup 6、Visual Studio Windows 构建工具、F
 
 尚未接入 `TAPPO` 与 `tappo_phone`：本机没有这两个源码目录，仓库地址待提供。iOS IPA 需要 macOS Jenkins 节点和签名资料。高层发布脚本有外部副作用，DUFS 与钉钉使用独立凭据和阶段。
 
-三个 Jenkins 任务使用 **Pipeline script from SCM**，从本仓库 `main` 分支读取 `jenkins/*.Jenkinsfile`。构建开始时会再次检出同一仓库，从该提交加载 `jenkins/common.ps1`。当前 Jenkins 使用本机 Git 路径 `D:\work\candao-package`，因为此机器暂时无法连接本仓库的 GitHub `origin`；因此请先提交脚本修改，再运行构建。同步脚本从当前进程的 `JENKINS_USER`、`JENKINS_API_TOKEN` 环境变量取凭据，不写入仓库。
+三个 Jenkins 任务使用 **Pipeline script from SCM**，从本仓库 `main` 分支读取 `jenkins/*.Jenkinsfile`。构建开始时会再次检出同一仓库，从该提交加载 `jenkins/common.ps1`。当前 Jenkins 使用本机 Git 路径 `D:\work\candao-package`，因为此机器暂时无法连接本仓库的 GitHub `origin`；因此请先提交脚本修改，再运行构建。Jenkins Git 插件的本地仓库检出选项已在运行时启用，并写入 `F:\Jenkins\jenkins.xml` 供服务重启后使用；此选项允许 Jenkins 任务读取本机 Git 目录，应仅给可信用户任务配置权限。同步脚本从当前进程的 `JENKINS_USER`、`JENKINS_API_TOKEN` 环境变量取凭据，不写入仓库。
 
 ## 可配置打包与分发
 
