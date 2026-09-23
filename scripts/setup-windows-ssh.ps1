@@ -1,6 +1,10 @@
 # Run from an elevated Windows PowerShell. No passwords are stored or changed.
 [CmdletBinding(SupportsShouldProcess = $true)]
-param()
+param(
+    # Use a client IP or VPN subnet when access is needed beyond the local subnet.
+    [ValidateNotNullOrEmpty()]
+    [string[]]$AllowedRemoteAddress = @('LocalSubnet')
+)
 
 $ErrorActionPreference = 'Stop'
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -21,17 +25,16 @@ if (!$capability -or $capability.State -ne 'Installed') {
 
 # Installation can create a broad default allow rule. Restrict it before starting SSH.
 $ruleName = 'OpenSSH-Server-In-TCP'
-$tailscaleRange = '100.64.0.0/10'
-if ($PSCmdlet.ShouldProcess($ruleName, "Allow inbound TCP 22 only from $tailscaleRange")) {
+if ($PSCmdlet.ShouldProcess($ruleName, "Allow inbound TCP 22 from $($AllowedRemoteAddress -join ', ')")) {
     $rule = Get-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue
     if ($rule) {
-        $rule | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -RemoteAddress $tailscaleRange
+        $rule | Get-NetFirewallAddressFilter | Set-NetFirewallAddressFilter -RemoteAddress $AllowedRemoteAddress
         $rule | Get-NetFirewallPortFilter | Set-NetFirewallPortFilter -Protocol TCP -LocalPort 22 -RemotePort Any
-        $rule | Set-NetFirewallRule -Enabled True -Direction Inbound -Action Allow -Profile Any
+        $rule | Set-NetFirewallRule -DisplayName 'OpenSSH Server (scoped access)' -Enabled True -Direction Inbound -Action Allow -Profile Any
     } else {
-        New-NetFirewallRule -Name $ruleName -DisplayName 'OpenSSH Server (Tailscale)' `
+        New-NetFirewallRule -Name $ruleName -DisplayName 'OpenSSH Server (scoped access)' `
             -Enabled True -Direction Inbound -Protocol TCP -Action Allow `
-            -LocalPort 22 -RemoteAddress $tailscaleRange -Profile Any | Out-Null
+            -LocalPort 22 -RemoteAddress $AllowedRemoteAddress -Profile Any | Out-Null
     }
 }
 
@@ -46,7 +49,7 @@ if ($PSCmdlet.ShouldProcess('sshd', 'Enable automatic startup and start SSH')) {
     }
     if (!$listening) { throw 'sshd started but TCP 22 is not listening. Check the existing sshd_config.' }
     Write-Output 'SSH is running and TCP 22 is listening.'
-    Write-Output 'The standard OpenSSH firewall rule allows Tailscale addresses only; custom firewall rules are unchanged.'
+    Write-Output "Standard OpenSSH firewall rule allows: $($AllowedRemoteAddress -join ', '). Custom firewall rules are unchanged."
 }
 
 Write-Output "Windows login identity: $($identity.Name)"
@@ -59,22 +62,14 @@ if ((Test-Path -LiteralPath $keygen) -and (Test-Path -LiteralPath $hostKey)) {
     if ($LASTEXITCODE -ne 0) { throw 'Cannot read the SSH host fingerprint' }
 }
 
-$tailscale = Join-Path $env:ProgramFiles 'Tailscale/tailscale.exe'
-if (!(Test-Path -LiteralPath $tailscale)) {
-    Write-Warning 'Tailscale was not found. Install/sign in to Tailscale on both devices before connecting.'
-    return
+Write-Output 'Windows IPv4 addresses (use an address reachable from your Mac):'
+$addresses = @(Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred |
+    Where-Object { $_.IPAddress -notmatch '^(127[.]|169[.]254[.])' })
+foreach ($address in $addresses) {
+    Write-Output "$($address.InterfaceAlias): $($address.IPAddress)/$($address.PrefixLength)"
+    Write-Output ('  ssh -l "' + $identity.Name + '" ' + $address.IPAddress)
 }
-$statusJson = & $tailscale status --json
-if ($LASTEXITCODE -ne 0) { throw 'Cannot read Tailscale status. Open Tailscale and check its connection.' }
-$status = $statusJson | ConvertFrom-Json
-Write-Output "Tailscale state: $($status.BackendState)"
-Write-Output "Tailscale network: $($status.CurrentTailnet.Name)"
-$ip = @($status.TailscaleIPs | Where-Object { $_ -match '^100[.]' }) | Select-Object -First 1
-if ($status.BackendState -ne 'Running' -or !$ip) {
-    Write-Warning 'Tailscale is not connected. SSH setup alone cannot make the two devices reachable.'
-    return
-}
-Write-Output "Windows Tailscale IP: $ip"
-Write-Output ('Mac command: ssh -l "' + $identity.Name + '" ' + $ip)
-Write-Output "Jenkins address: http://${ip}:8080/ (availability not tested by this script)"
-Write-Output 'Both devices must join the same Tailscale network, or have an authorized device share/access policy.'
+if (!$addresses.Count) { Write-Warning 'No usable IPv4 address was found.' }
+Write-Output 'No VPN or router port forwarding was configured. UU desktop access does not provide an SSH network route.'
+Write-Output 'Outside the company LAN, obtain a VPN or another reachable network route before connecting.'
+Write-Output 'For a routed client/VPN, rerun with -AllowedRemoteAddress set to its actual client IP or subnet.'
