@@ -12,15 +12,15 @@ pipeline {
     PUB_CACHE = 'C:\\Users\\Administrator\\AppData\\Local\\Pub\\Cache'
   }
   parameters {
-    string(name: 'REPOSITORY_URL', defaultValue: '', description: '源码仓库 URL 或节点本地路径；留空沿用项目本地仓库', trim: true)
-    string(name: 'BRANCH', defaultValue: '', description: '分支名（如 main）；指定时从远端获取，留空使用仓库默认分支', trim: true)
+    string(name: 'REPOSITORY_URL', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'D:/work/toa-pos-flutter' : '', description: '源码仓库 URL 或节点本地路径；指定本地路径时读取该仓库已提交代码', trim: true)
+    string(name: 'BRANCH', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'devlop_qc' : '', description: 'TOA QC 分支为 devlop_qc；按指定仓库获取分支，留空使用仓库默认分支', trim: true)
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
     string(name: 'DUFS_URL', defaultValue: '', description: 'DUFS 目标目录完整 URL；开启上传时必填', trim: true)
     string(name: 'DUFS_CREDENTIALS_ID', defaultValue: 'dufs', description: 'Jenkins 用户名密码凭据 ID', trim: true)
     booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知；可独立于 DUFS 开启')
     string(name: 'DINGTALK_CREDENTIALS_ID', defaultValue: 'dingtalk-webhook', description: 'Jenkins Secret text 凭据 ID，内容为机器人完整 Webhook', trim: true)
-    choice(name: 'PROJECT', choices: ['queue-screen', 'self-checkout', 'toa-pos'], description: 'Windows application')
-    choice(name: 'ENVIRONMENT', choices: ['qc', 'release', 'staging', 'test-prod'], description: 'Allowed values depend on the project')
+    choice(name: 'PROJECT', choices: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? ['toa-pos'] : ['queue-screen', 'self-checkout', 'toa-pos'], description: 'Windows application')
+    choice(name: 'ENVIRONMENT', choices: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? ['test-prod'] : ['qc', 'release', 'staging', 'test-prod'], description: 'TOA QC 使用 test-prod；Git 分支与构建环境是不同参数')
     choice(name: 'PRODUCT', choices: ['self_checkout', 'kiosk'], description: 'Used by self-checkout only')
   }
   stages {
@@ -32,6 +32,9 @@ pipeline {
           $ErrorActionPreference = 'Stop'
           . "$env:WORKSPACE/jenkins/common.ps1"
           Assert-DeliveryOptions
+          if ($env:JOB_BASE_NAME -eq 'TOA-POS-Windows-Package' -and ($env:PROJECT -ne 'toa-pos' -or $env:ENVIRONMENT -ne 'test-prod')) {
+            throw 'The TOA POS Windows task only builds toa-pos / test-prod'
+          }
           $sources = @{
             'queue-screen' = 'D:\\work\\toa-meal-pick-up-screen-flutter'
             'self-checkout' = 'D:\\work\\self-checkout'
@@ -40,7 +43,7 @@ pipeline {
           $allowed = @{
             'queue-screen' = @('qc', 'release')
             'self-checkout' = @('staging', 'release')
-            'toa-pos' = @('test-prod', 'release')
+            'toa-pos' = @('test-prod')
           }
           if (!$sources.ContainsKey($env:PROJECT) -or $env:ENVIRONMENT -notin $allowed[$env:PROJECT]) {
             throw "Unsupported project/environment pair: $env:PROJECT / $env:ENVIRONMENT"

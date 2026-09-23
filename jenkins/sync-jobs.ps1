@@ -27,6 +27,7 @@ if ($Branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $Branch.Contains('..')
 $jobs = @{
     'HPOS-Android-Package' = 'hpos.Jenkinsfile'
     'Candao-Windows-Package' = 'windows.Jenkinsfile'
+    'TOA-POS-Windows-Package' = 'windows.Jenkinsfile'
     'Candao-Android-Package' = 'android.Jenkinsfile'
 }
 
@@ -84,6 +85,9 @@ foreach ($name in $jobs.Keys) {
         $newDefinition.AppendChild($element) | Out-Null
     }
     $xml.DocumentElement.ReplaceChild($newDefinition, $oldDefinition) | Out-Null
+    if ($name -eq 'TOA-POS-Windows-Package') {
+        $xml.SelectSingleNode('/flow-definition/description').InnerText = 'TOA POS Flutter Windows installer. QC branch: devlop_qc; build type: test-prod. Source defaults to the verified local Git repository. DUFS and DingTalk are optional and default off.'
+    }
     $properties = $xml.SelectSingleNode('/flow-definition/properties')
     if (!$properties) {
         $properties = $xml.CreateElement('properties')
@@ -103,6 +107,11 @@ foreach ($name in $jobs.Keys) {
         $match = [regex]::Match($line.Trim(), "^(string|choice|booleanParam)\(name: '([^']+)', (defaultValue|choices): (.*), description: '([^']*)'(, trim: true)?\)$")
         if (!$match.Success) { throw "Unsupported parameter declaration: $line" }
         $type, $parameterName, $value, $description = $match.Groups[1].Value, $match.Groups[2].Value, $match.Groups[4].Value, $match.Groups[5].Value
+        # Resolve the same job-specific defaults that Declarative Pipeline evaluates at runtime.
+        $conditional = [regex]::Match($value, "^env[.]JOB_BASE_NAME == '([^']+)' \? (.*?) : (.*)$")
+        if ($conditional.Success) {
+            $value = if ($name -eq $conditional.Groups[1].Value) { $conditional.Groups[2].Value } else { $conditional.Groups[3].Value }
+        }
         $class = switch ($type) { 'string' { 'String' }; 'choice' { 'Choice' }; 'booleanParam' { 'Boolean' } }
         $definition = $xml.CreateElement("hudson.model.${class}ParameterDefinition")
         foreach ($field in @{ name = $parameterName; description = $description }.GetEnumerator()) {

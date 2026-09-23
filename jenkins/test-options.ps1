@@ -22,7 +22,7 @@ try {
         Assert ($xml.SelectSingleNode("//parameterDefinitions/*[name='SEND_DINGTALK']/defaultValue").InnerText -eq 'false') 'Notification must default off'
         $definition = $xml.SelectSingleNode('//definition')
         Assert ($definition.GetAttribute('class') -eq 'org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition') 'Pipeline must load from Git SCM'
-        Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
+        Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('TOA-POS-Windows-Package', 'windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
         Assert ($definition.scm.userRemoteConfigs.'hudson.plugins.git.UserRemoteConfig'.url -eq ((git -C $PSScriptRoot remote get-url origin).Trim() -replace '^(https?://)[^/]*@', '$1')) 'Wrong Git repository'
         $pipeline = Get-Content (Join-Path $PSScriptRoot $definition.scriptPath.Replace('jenkins/', '')) -Raw
         Assert (!$pipeline.Contains('# @include')) 'Unexpanded helper'
@@ -36,6 +36,13 @@ try {
         Assert ($pipeline.Contains('when { expression { params.UPLOAD_DUFS } }')) 'Missing upload guard'
         Assert ($pipeline.Contains('when { expression { params.SEND_DINGTALK } }')) 'Missing notification guard'
     }
+    [xml]$toa = Get-Content "$temp/xml/TOA-POS-Windows-Package.xml" -Raw -Encoding UTF8
+    Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='BRANCH']/defaultValue").InnerText -eq 'devlop_qc') 'TOA must default to the QC branch'
+    Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='REPOSITORY_URL']/defaultValue").InnerText -eq 'D:/work/toa-pos-flutter') 'Wrong TOA source repository'
+    Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='PROJECT']/choices/a").InnerText -eq 'toa-pos') 'TOA task must exclude queue-screen'
+    Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='ENVIRONMENT']/choices/a").InnerText -eq 'test-prod') 'TOA task must use test-prod'
+    [xml]$general = Get-Content "$temp/xml/Candao-Windows-Package.xml" -Raw -Encoding UTF8
+    Assert ($general.SelectSingleNode("//parameterDefinitions/*[name='PROJECT']/choices/a/string[1]").InnerText -eq 'queue-screen') 'General task defaults changed'
     & "$PSScriptRoot/sync-jobs.ps1" -RepositoryUrl 'https://example.invalid/package.git' -Branch 'feature/build' -OutputDirectory "$temp/explicit"
     [xml]$explicit = Get-Content "$temp/explicit/HPOS-Android-Package.xml" -Raw -Encoding UTF8
     Assert ($explicit.SelectSingleNode('//userRemoteConfigs/*/url').InnerText -eq 'https://example.invalid/package.git') 'Explicit remote ignored'
@@ -77,7 +84,9 @@ try {
                 [xml]$updated = [Text.Encoding]::UTF8.GetString($Body)
                 Assert ($updated.SelectSingleNode('//properties/example.Keep/value').InnerText -eq 'keep') 'Lost existing job property'
                 Assert ($updated.SelectNodes('//hudson.model.ParametersDefinitionProperty').Count -eq 1) 'Duplicate parameter definitions'
-                Assert ($updated.SelectSingleNode('//description').InnerText -eq 'keep description') 'Lost job description'
+                if ($Uri -notmatch '/TOA-POS-Windows-Package/') {
+                    Assert ($updated.SelectSingleNode('//description').InnerText -eq 'keep description') 'Lost job description'
+                }
             } else {
                 return @{ Content = '<flow-definition><description>keep description</description><properties><example.Keep><value>keep</value></example.Keep><hudson.model.ParametersDefinitionProperty/></properties><definition><script>old</script><sandbox>true</sandbox></definition></flow-definition>' }
             }
