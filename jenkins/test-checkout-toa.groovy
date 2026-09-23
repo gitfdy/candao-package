@@ -10,7 +10,7 @@ def binding = new Binding([
 def pipeline = new GroovyShell(binding).evaluate(new File('jenkins/checkout-toa.groovy'))
 pipeline.call('', '')
 assert calls*.directory == ['source', 'octopus_payment_flutter']
-assert calls*.config*.userRemoteConfigs.flatten()*.credentialsId == ['candao-git', 'candao-git']
+assert calls*.config*.userRemoteConfigs.flatten()*.credentialsId == ['candao-git-new', 'candao-git-new']
 assert calls[0].config.userRemoteConfigs[0].url == 'https://git.can-dao.com/flutter-business/toa-pos-flutter.git'
 assert calls[0].config.branches[0].name == 'refs/heads/devlop_qc'
 assert calls[1].config.userRemoteConfigs[0].url == 'https://git.can-dao.com/flutter-business/octopus_payment_flutter.git'

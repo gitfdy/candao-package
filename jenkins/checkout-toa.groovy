@@ -18,7 +18,7 @@ def call(String repository, String branch) {
       def revision = checkout([
         $class: 'GitSCM',
         branches: [[name: "refs/heads/${repo.branch}"]],
-        userRemoteConfigs: [[url: repo.url, credentialsId: 'candao-git']],
+        userRemoteConfigs: [[url: repo.url, credentialsId: 'candao-git-new']],
         extensions: []
       ])
       echo("${repo.directory}: ${repo.branch} @ ${revision.GIT_COMMIT}")

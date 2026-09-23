@@ -28,7 +28,7 @@ Windows 的 Jenkins 服务以 LocalSystem 运行。此账号的 Git 已针对 `h
 四个任务均支持：
 
 - `REPOSITORY_URL`：TOA 仅支持公司 HTTPS Git URL，留空默认 TOA 远端地址；其他项目支持 Git URL 或节点本地路径，留空沿用上表本地仓库。
-- `BRANCH`：TOA 留空默认 `devlop_qc`，通过 Jenkins 凭据 `candao-git` 拉取远端分支。其他项目填写分支时，地址留空则读取本地仓库 `origin`；两项均空则复制本地已提交版本，指定 URL 但分支留空则使用仓库默认分支。其他项目认证沿用节点配置。不要在 URL 中填写密码或 Token。
+- `BRANCH`：TOA 留空默认 `devlop_qc`，通过 Jenkins 凭据 `candao-git-new` 拉取远端分支。其他项目填写分支时，地址留空则读取本地仓库 `origin`；两项均空则复制本地已提交版本，指定 URL 但分支留空则使用仓库默认分支。其他项目认证沿用节点配置。不要在 URL 中填写密码或 Token。
 - HPOS 的环境使用 `BUILD_TYPE`；另外两个任务使用 `ENVIRONMENT`。不支持的项目／环境组合在下载和构建前报错。
 - `UPLOAD_DUFS`：默认关闭。TOA Windows 已预填 `DUFS_URL=http://192.168.225.46:5000/dufs/TOA-POS-Windows`（取自 `devlop_qc` 构建脚本），其他任务开启时填写目标目录。流水线固定引用 Jenkins 的 Username with password 凭据 `dufs`，不再要求在构建表单填写凭据 ID。目标目录须已存在且可写。先归档，再上传；回读 SHA-256 一致才记为上传成功。
 - `SEND_DINGTALK`：默认关闭。独立控制成功通知，可在不上传时发送 Jenkins 产物入口。流水线固定引用 Secret text 凭据 `dingtalk-webhook`，不再显示凭据 ID 输入框，内容为机器人完整 Webhook。消息包含原 TOA 机器人要求的关键词 `push`，并保留 `Candao`；机器人需允许对应关键词或构建节点 IP；当前不支持机器人加签。上传开启但失败时任务失败，不发送成功通知。
@@ -61,7 +61,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\sync-jobs.ps1 -Out
 - QC 分支实际名为 `devlop_qc`，远端不存在名为 `qc` 的分支。Git 分支名与脚本的 `--type test-prod` 是不同参数。
 - 默认 `REPOSITORY_URL=https://git.can-dao.com/flutter-business/toa-pos-flutter.git`、`BRANCH=devlop_qc`。每次清理 Jenkins 工作区后，从远端检出到 `source`，不读取 Windows 开发仓库。TOA 的地址或分支留空时，也使用上述默认值。
 - 八达通依赖从 `https://git.can-dao.com/flutter-business/octopus_payment_flutter.git` 的 `main` 分支检出到工作区同级 `octopus_payment_flutter`。日志记录两个仓库的提交 SHA。Android TOA 复用同一检出逻辑。
-- 首次使用：在 Jenkins → Manage Jenkins → Credentials 添加 Username with password 凭据，ID 为 `candao-git`，账号和密码或令牌需有这两个仓库的只读权限。凭据只用于公司 HTTPS Git 主机；认证失败停止，不回退到本地仓库。
+- 首次使用：在 Jenkins → Manage Jenkins → Credentials 添加 Username with password 凭据，ID 为 `candao-git-new`，账号和密码或令牌需有这两个仓库的只读权限。凭据只用于公司 HTTPS Git 主机；认证失败停止，不回退到本地仓库。
 - 旧任务表单如果仍保存本地路径，须同步配置或手动改填远端 URL；TOA 会拒绝本地地址。同步配置不触发构建。
 - 本次隔离应用源码和八达通依赖；Flutter SDK、Pub 缓存仍沿用节点已有工具链。其他项目的本地检出流程保持兼容。
 - `UPLOAD_DUFS=false`、`SEND_DINGTALK=false` 默认保持关闭；`PRODUCT` 对 TOA 无效。

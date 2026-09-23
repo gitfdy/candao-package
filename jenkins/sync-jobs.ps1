@@ -86,7 +86,7 @@ foreach ($name in $jobs.Keys) {
     }
     $xml.DocumentElement.ReplaceChild($newDefinition, $oldDefinition) | Out-Null
     if ($name -eq 'TOA-POS-Windows-Package') {
-        $xml.SelectSingleNode('/flow-definition/description').InnerText = 'TOA POS Flutter Windows installer. QC branch: devlop_qc; build type: test-prod. Source and Octopus dependency are checked out from private remote Git repositories using candao-git credentials. DUFS and DingTalk are optional and default off.'
+        $xml.SelectSingleNode('/flow-definition/description').InnerText = 'TOA POS Flutter Windows installer. QC branch: devlop_qc; build type: test-prod. Source and Octopus dependency are checked out from private remote Git repositories using candao-git-new credentials. DUFS and DingTalk are optional and default off.'
     }
     $properties = $xml.SelectSingleNode('/flow-definition/properties')
     if (!$properties) {
