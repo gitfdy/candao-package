@@ -7,7 +7,7 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
   }
   parameters {
-    string(name: 'REPOSITORY_URL', defaultValue: '', description: '源码仓库 URL 或节点本地路径；留空沿用项目本地仓库', trim: true)
+    string(name: 'REPOSITORY_URL', defaultValue: '', description: 'TOA 留空使用公司远端仓库；其他项目留空沿用本地仓库', trim: true)
     string(name: 'BRANCH', defaultValue: '', description: '分支名（如 main）；指定时从远端获取，留空使用仓库默认分支', trim: true)
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
     string(name: 'DUFS_URL', defaultValue: '', description: 'DUFS 目标目录完整 URL；开启上传时必填', trim: true)
@@ -34,19 +34,25 @@ pipeline {
           . "$env:WORKSPACE/jenkins/common.ps1"
           Assert-DeliveryOptions
           $repo = switch ($env:PROJECT) {
-            'toa-pos' { 'D:\\work\\toa-pos-flutter' }
+            'toa-pos' { 'https://git.can-dao.com/flutter-business/toa-pos-flutter.git' }
             'self-checkout' { 'D:\\work\\self-checkout' }
             default { throw "Unsupported project: $env:PROJECT" }
           }
           $allowed = @{ 'toa-pos' = @('test-prod', 'release', 'debug'); 'self-checkout' = @('staging', 'release') }
           if ($env:ENVIRONMENT -notin $allowed[$env:PROJECT]) { throw 'Unsupported project/environment pair' }
-          Checkout-Source $repo
-          if ($env:PROJECT -in @('self-checkout', 'toa-pos')) {
+          if ($env:PROJECT -ne 'toa-pos') { Checkout-Source $repo }
+          if ($env:PROJECT -eq 'self-checkout') {
             git clone --local --no-hardlinks -- 'D:\\work\\octopus_payment_flutter' octopus_payment_flutter
             if ($LASTEXITCODE -ne 0) { throw 'Octopus dependency clone failed' }
             git -C octopus_payment_flutter rev-parse HEAD
           }
         '''
+        script {
+          if (params.PROJECT == 'toa-pos') {
+            def toaCheckout = load 'jenkins/checkout-toa.groovy'
+            toaCheckout.call(params.REPOSITORY_URL, params.BRANCH)
+          }
+        }
       }
     }
     stage('Preflight') {

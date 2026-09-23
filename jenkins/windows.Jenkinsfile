@@ -14,7 +14,7 @@ pipeline {
     PUB_CACHE = 'C:\\Users\\Administrator\\AppData\\Local\\Pub\\Cache'
   }
   parameters {
-    string(name: 'REPOSITORY_URL', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'D:/work/toa-pos-flutter' : '', description: '源码仓库 URL 或节点本地路径；指定本地路径时读取该仓库已提交代码', trim: true)
+    string(name: 'REPOSITORY_URL', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'https://git.can-dao.com/flutter-business/toa-pos-flutter.git' : '', description: 'TOA 仅允许公司 HTTPS Git 地址；其他项目兼容本地路径', trim: true)
     string(name: 'BRANCH', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'devlop_qc' : '', description: 'TOA QC 分支为 devlop_qc；按指定仓库获取分支，留空使用仓库默认分支', trim: true)
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
     string(name: 'DUFS_URL', defaultValue: env.JOB_BASE_NAME == 'TOA-POS-Windows-Package' ? 'http://192.168.225.46:5000/dufs/TOA-POS-Windows' : '', description: 'DUFS 目标目录完整 URL；TOA Windows 已预填，其他项目开启上传时填写', trim: true)
@@ -38,7 +38,7 @@ pipeline {
           $sources = @{
             'queue-screen' = 'D:\\work\\toa-meal-pick-up-screen-flutter'
             'self-checkout' = 'D:\\work\\self-checkout'
-            'toa-pos' = 'D:\\work\\toa-pos-flutter'
+            'toa-pos' = 'https://git.can-dao.com/flutter-business/toa-pos-flutter.git'
           }
           $allowed = @{
             'queue-screen' = @('qc', 'release')
@@ -49,13 +49,19 @@ pipeline {
             throw "Unsupported project/environment pair: $env:PROJECT / $env:ENVIRONMENT"
           }
           $repo = $sources[$env:PROJECT]
-          Checkout-Source $repo
-          if ($env:PROJECT -in @('self-checkout', 'toa-pos')) {
+          if ($env:PROJECT -ne 'toa-pos') { Checkout-Source $repo }
+          if ($env:PROJECT -eq 'self-checkout') {
             git clone --local --no-hardlinks -- 'D:\\work\\octopus_payment_flutter' octopus_payment_flutter
             if ($LASTEXITCODE -ne 0) { throw 'Octopus dependency clone failed' }
             git -C octopus_payment_flutter rev-parse HEAD
           }
         '''
+        script {
+          if (params.PROJECT == 'toa-pos') {
+            def toaCheckout = load 'jenkins/checkout-toa.groovy'
+            toaCheckout.call(params.REPOSITORY_URL, params.BRANCH)
+          }
+        }
       }
     }
     stage('Preflight') {

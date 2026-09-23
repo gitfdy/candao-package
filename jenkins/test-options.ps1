@@ -46,7 +46,7 @@ try {
     [xml]$toa = Get-Content "$temp/xml/TOA-POS-Windows-Package.xml" -Raw -Encoding UTF8
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='DUFS_URL']/defaultValue").InnerText -eq 'http://192.168.225.46:5000/dufs/TOA-POS-Windows') 'TOA upload directory must match its QC build script'
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='BRANCH']/defaultValue").InnerText -eq 'devlop_qc') 'TOA must default to the QC branch'
-    Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='REPOSITORY_URL']/defaultValue").InnerText -eq 'D:/work/toa-pos-flutter') 'Wrong TOA source repository'
+    Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='REPOSITORY_URL']/defaultValue").InnerText -eq 'https://git.can-dao.com/flutter-business/toa-pos-flutter.git') 'Wrong TOA source repository'
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='PROJECT']/choices/a").InnerText -eq 'toa-pos') 'TOA task must exclude queue-screen'
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='ENVIRONMENT']/choices/a").InnerText -eq 'test-prod') 'TOA task must use test-prod'
     [xml]$general = Get-Content "$temp/xml/Candao-Windows-Package.xml" -Raw -Encoding UTF8
@@ -57,7 +57,7 @@ try {
     Assert ($explicit.SelectSingleNode('//branches/*/name').InnerText -eq '*/feature/build') 'Explicit branch ignored'
     # Execute the real Windows preflight with filesystem/SDK probes mocked.
     $windowsPipeline = Get-Content "$PSScriptRoot/windows.Jenkinsfile" -Raw -Encoding UTF8
-    # Both TOA and self-checkout need the sibling package in the clean workspace.
+    # Only the legacy self-checkout flow may clone a local dependency.
     foreach ($platform in @('windows', 'android')) {
         $pipeline = Get-Content "$PSScriptRoot/$platform.Jenkinsfile" -Raw -Encoding UTF8
         $dependency = [regex]::Match($pipeline, '(?s)if \(\$env:PROJECT[^\r\n]+\) \{\s+git clone.*?\n          \}').Value.Replace('\\', '\')
@@ -68,11 +68,11 @@ try {
                 $env:PROJECT = $project
                 $script:gitCalls = 0
                 & ([scriptblock]::Create($dependency))
-                $expected = if ($project -eq 'queue-screen') { 0 } else { 2 }
+                $expected = if ($project -eq 'self-checkout') { 2 } else { 0 }
                 Assert ($script:gitCalls -eq $expected) "Wrong dependency checkout for $platform / $project"
             }
             function git { $global:LASTEXITCODE = 1 }
-            $env:PROJECT = 'toa-pos'
+            $env:PROJECT = 'self-checkout'
             Expect-Failure { & ([scriptblock]::Create($dependency)) }
             $env:PROJECT = ''
         }
