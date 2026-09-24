@@ -89,3 +89,11 @@ TOA 专用入口现开放 `test-prod`（测试）、`pre-prod`（预生产）、
 若所选源码未实现环境参数、已删除对应 Dart 环境入口，或出现不认识的发布入口，则明确失败，不静默改环境。此调整不承诺任意历史分支都能成功编译，也不恢复应用源码已删除的预生产配置。
 
 TOA Windows SDK 按所选源码提交的 `.fvmrc` 选择 `D:\work\candao-package\.jenkins-sdk\flutter-<version>`；未提交版本配置的旧 QC 源码使用 Flutter 3.27.2，避免旧 `flex_color_scheme` 与 3.41 API 不兼容。SDK 必须预先安装，缺失时直接报错。八达通从远端 `v3.8.1-TA` 分支检出，该分支提供 TOA 所用的 reader/reconnect 接口；不再使用缺少接口的 main。完整构建兼容性仍以具体分支实测为准。
+
+## Kiosk / 自助收银 Windows
+
+`TOA-KIOSK-WINDOWS` 使用 `jenkins/kiosk-windows.Jenkinsfile`（旧任务曾错误引用 Android 流水线）。仓库下拉固定为 self-checkout 远端，分支实时从 GitLab 获取，默认 main。产品可选 kiosk / self_checkout；环境 staging / test-prod / release / debug 与分支独立，prod 仅是 release 别名。原脚本没有独立 pre-prod 参数，不自行映射。
+
+DUFS 根据产品使用 Kiosk-Windows 或 Self-Checkout-Windows 目录；地址与凭据隐藏，上传和通知独立勾选且默认关闭。源码和八达通 main 依赖检出到 Jenkins 工作区。SDK 沿用节点 self-checkout 配置的 FVM SDK；源码缺少 .fvmrc 时仅在 Jenkins 工作区写入该 SDK 的实际版本，已声明版本则检查匹配。调用原 Windows 脚本并传入 --local true，保留原产品包装逻辑。
+
+仅同步此任务：`./jenkins/sync-jobs.ps1 -JobName TOA-KIOSK-WINDOWS`。动态分支脚本需管理员审核批准。此次参数优化不等于已验证所有分支能成功打包。

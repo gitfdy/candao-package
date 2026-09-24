@@ -26,6 +26,7 @@ if ($Branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $Branch.Contains('..')
     throw 'Invalid pipeline Git branch'
 }
 $jobs = @{
+    'TOA-KIOSK-WINDOWS' = 'kiosk-windows.Jenkinsfile'
     'HPOS-Android-Package' = 'hpos.Jenkinsfile'
     'Candao-Windows-Package' = 'windows.Jenkinsfile'
     'TOA-POS-Windows' = 'toa-windows.Jenkinsfile'
@@ -110,6 +111,7 @@ foreach ($name in $jobs.Keys) {
         $parameter = $xml.CreateElement('org.biouno.unochoice.ChoiceParameter')
         $parameter.SetAttribute('plugin', 'uno-choice')
         $parameter.InnerXml = '<name>BRANCH</name><description>GitLab remote branches; searchable, defaults to devlop_qc</description><randomName>remote-branch</randomName><visibleItemCount>10</visibleItemCount><choiceType>PT_SINGLE_SELECT</choiceType><filterable>true</filterable><filterLength>1</filterLength><script class="org.biouno.unochoice.model.GroovyScript"><secureScript><script/><sandbox>false</sandbox></secureScript><secureFallbackScript><script>return ["Unable to read remote branches:disabled"]</script><sandbox>true</sandbox></secureFallbackScript></script>'
+        $parameter.SelectSingleNode('description').InnerText = 'GitLab remote branches; searchable'
         $parameter.SelectSingleNode('script/secureScript/script').InnerText = $branchScript
         $definitions.AppendChild($parameter) | Out-Null
         $block = $block.Remove($dynamic.Index, $dynamic.Length)

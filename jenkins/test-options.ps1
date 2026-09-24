@@ -48,7 +48,7 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
         }
         $definition = $xml.SelectSingleNode('//definition')
         Assert ($definition.GetAttribute('class') -eq 'org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition') 'Pipeline must load from Git SCM'
-        Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('TOA-POS-Windows', 'toa-windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
+        Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('TOA-KIOSK-WINDOWS', 'kiosk-windows').Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('TOA-POS-Windows', 'toa-windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
         Assert ($definition.scm.userRemoteConfigs.'hudson.plugins.git.UserRemoteConfig'.url -eq ((git -C $PSScriptRoot remote get-url origin).Trim() -replace '^(https?://)[^/]*@', '$1')) 'Wrong Git repository'
         $pipeline = Get-Content (Join-Path $PSScriptRoot $definition.scriptPath.Replace('jenkins/', '')) -Raw
         Assert (!$pipeline.Contains('# @include')) 'Unexpanded helper'
@@ -67,6 +67,12 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
         Assert ($pipeline.Contains('credentialsId: env.DINGTALK_CREDENTIALS_ID')) 'DingTalk binding must use configured credential'
     }
     [xml]$hpos = Get-Content "$temp/xml/HPOS-Android-Package.xml" -Raw -Encoding UTF8
+    [xml]$kiosk = Get-Content "$temp/xml/TOA-KIOSK-WINDOWS.xml" -Raw -Encoding UTF8
+    Assert ($kiosk.SelectSingleNode('//definition/scriptPath').InnerText -eq 'jenkins/kiosk-windows.Jenkinsfile') 'Kiosk must use Windows pipeline'
+    Assert ($null -eq $kiosk.SelectSingleNode("//parameterDefinitions/*[name='DUFS_URL' or name='PROJECT']")) 'Kiosk infrastructure fields must be hidden'
+    Assert ($kiosk.SelectSingleNode("//parameterDefinitions/*[name='BRANCH']").LocalName -eq 'org.biouno.unochoice.ChoiceParameter') 'Kiosk branches must be dynamic'
+    Assert ((($kiosk.SelectNodes("//parameterDefinitions/*[name='PRODUCT']/choices/a/string") | ForEach-Object InnerText) -join ',') -eq 'kiosk,self_checkout') 'Kiosk product choices mismatch'
+    Assert ((($kiosk.SelectNodes("//parameterDefinitions/*[name='ENVIRONMENT']/choices/a/string") | ForEach-Object InnerText) -join ',') -eq 'staging,test-prod,release,debug') 'Kiosk environments mismatch'
     Assert ($null -eq $hpos.SelectSingleNode("//parameterDefinitions/*[name='DUFS_URL' or name='REPOSITORY_URL']")) 'HPOS infrastructure fields must be hidden'
     Assert ($hpos.SelectSingleNode("//parameterDefinitions/*[name='BRANCH']").LocalName -eq 'org.biouno.unochoice.ChoiceParameter') 'HPOS branches must be dynamic'
     [xml]$toa = Get-Content "$temp/xml/TOA-POS-Windows.xml" -Raw -Encoding UTF8
