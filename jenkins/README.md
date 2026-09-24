@@ -133,3 +133,7 @@ DUFS 根据产品使用 Kiosk-Windows 或 Self-Checkout-Windows 目录；地址�
 运行 `jenkins/test-tappo-android.ps1` 验证环境/格式、版本号、签名要求及密码转义；`jenkins/test-options.ps1` 验证参数渲染和 APK/AAB 分发校验。
 
 仅同步新任务：`./jenkins/sync-jobs.ps1 -JobName TAPPO-Android,TAPPO-PHONE-Android`。无需全量同步旧任务，也不会启动构建。参数和脚本验证不代表已完成真实 Android 编译；正式 Phone AAB 还需要上传签名凭据后验证。
+
+### TOA Windows Incident 上报
+
+`ENABLE_INCIDENT_UPLOAD` 默认关闭，关闭时无需 Incident 服务地址。Jenkins 只调整临时源码目录中的主打包脚本，显式关闭上报并保留构建身份、更新配置及安装器流程。开启时需在 Jenkins 环境配置中提供 `TOA_INCIDENT_API_BASE_URL`；必须是没有用户信息、查询参数或片段的 HTTPS 地址，且所选源码分支及构建类型支持上报。缺失或无效地址会在执行项目打包脚本前报错。此开关与 DUFS 上传、钉钉通知独立。

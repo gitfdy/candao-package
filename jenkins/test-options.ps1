@@ -34,6 +34,35 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
     Expect-Failure { Prepare-ToaBuild "$temp/adapter" unknown }
     Set-Content adapter/scripts/build_windows.bat ($fixture.Replace('if "%BUILD_TYPE%"=="release" goto :build_shorebird_windows', 'call shorebird release windows'))
     Expect-Failure { Prepare-ToaBuild "$temp/adapter" release }
+    $incidentFixture = $fixture + @'
+
+if /i "%BUILD_TYPE%"=="release" goto :require_incident_config
+:require_incident_config
+set "BUILD_PARAMS=!BUILD_PARAMS! --dart-define=TOA_INCIDENT_UPLOAD_ENABLED=true"
+:incident_config_ready
+set "BUILD_PARAMS=!BUILD_PARAMS! --dart-define=TOA_INCIDENT_BUILD_MANIFEST_B64=manifest"
+'@
+    $savedIncidentUrl = $env:TOA_INCIDENT_API_BASE_URL
+    try {
+        $env:TOA_INCIDENT_API_BASE_URL = ''
+        Set-Content adapter/scripts/build_windows.bat $incidentFixture
+        Prepare-ToaBuild "$temp/adapter" release false
+        $adapted = Get-Content adapter/scripts/build_windows.bat -Raw
+        Assert ($adapted -match '(?s):require_incident_config\r?\nset "BUILD_PARAMS=.*?TOA_INCIDENT_UPLOAD_ENABLED=false"\r?\ngoto :incident_config_ready') 'Disabled Incident must skip the address requirement'
+        Assert ($adapted.Contains('TOA_INCIDENT_BUILD_MANIFEST_B64=manifest')) 'Keep build manifest when upload is disabled'
+        foreach ($url in @('', 'http://incident.example.com', 'https://user@incident.example.com', 'https://incident.example.com?q=1', 'https://incident.example.com/#fragment')) {
+            $env:TOA_INCIDENT_API_BASE_URL = $url
+            Set-Content adapter/scripts/build_windows.bat $incidentFixture
+            Expect-Failure { Prepare-ToaBuild "$temp/adapter" release true }
+        }
+        $env:TOA_INCIDENT_API_BASE_URL = 'https://incident.example.com'
+        Set-Content adapter/scripts/build_windows.bat $incidentFixture
+        Prepare-ToaBuild "$temp/adapter" release true
+        Assert (!(Get-Content adapter/scripts/build_windows.bat -Raw).Contains('TOA_INCIDENT_UPLOAD_ENABLED=false')) 'Enabled Incident must keep upstream validation'
+        Expect-Failure { Prepare-ToaBuild "$temp/adapter" release invalid }
+        Set-Content adapter/scripts/build_windows.bat $fixture
+        Expect-Failure { Prepare-ToaBuild "$temp/adapter" release true }
+    } finally { $env:TOA_INCIDENT_API_BASE_URL = $savedIncidentUrl }
     & "$PSScriptRoot/sync-jobs.ps1" -OutputDirectory "$temp/xml"
     foreach ($file in Get-ChildItem "$temp/xml/*.xml") {
         [xml]$xml = Get-Content $file -Raw -Encoding UTF8

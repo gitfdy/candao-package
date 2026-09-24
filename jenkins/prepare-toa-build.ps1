@@ -1,5 +1,9 @@
 # Adapt only the disposable Jenkins checkout. Keep the branch's installer logic.
-function Prepare-ToaBuild([string]$SourceDirectory, [string]$Environment) {
+function Prepare-ToaBuild(
+    [string]$SourceDirectory,
+    [string]$Environment,
+    [ValidateSet('true', 'false')][string]$IncidentUploadEnabled = 'false'
+) {
     if ($Environment -notin @('test-prod', 'pre-prod', 'release', 'debug', 'release-debug')) {
         throw 'Unsupported TOA environment'
     }
@@ -15,6 +19,26 @@ function Prepare-ToaBuild([string]$SourceDirectory, [string]$Environment) {
             throw "Selected source does not consume $define; refusing to build the wrong environment"
         }
     }
+    $incidentLabel = '(?m)^:require_incident_config\r?$'
+    if ($IncidentUploadEnabled -eq 'true') {
+        if ($script -notmatch $incidentLabel -or !$script.Contains('if /i "%BUILD_TYPE%"=="' + $Environment + '" goto :require_incident_config')) {
+            throw 'Selected source/build type does not support Incident upload'
+        }
+        $uri = $null
+        $url = $env:TOA_INCIDENT_API_BASE_URL
+        if ($url -notmatch '^https://[A-Za-z0-9._~:/-]+$' -or
+            ![Uri]::TryCreate($url, [UriKind]::Absolute, [ref]$uri) -or
+            $uri.Scheme -ne 'https' -or !$uri.Host -or $uri.UserInfo -or $uri.Query -or $uri.Fragment) {
+            throw 'Incident upload requires TOA_INCIDENT_API_BASE_URL with a safe HTTPS URL'
+        }
+    } elseif ($script -match $incidentLabel) {
+        # Only adapt the Jenkins checkout; preserve the upstream enabled path and build manifest.
+        $disabled = ":require_incident_config`r`n" +
+            'set "BUILD_PARAMS=!BUILD_PARAMS! --dart-define=TOA_INCIDENT_UPLOAD_ENABLED=false"' +
+            "`r`ngoto :incident_config_ready"
+        $script = [regex]::Replace($script, $incidentLabel, $disabled)
+    }
+    Write-Output "Incident upload enabled: $IncidentUploadEnabled"
     # Newer TOA scripts route release through Shorebird even with --local true.
     $dispatch = 'if "%BUILD_TYPE%"=="release" goto :build_shorebird_windows'
     if ($Environment -eq 'release' -and $script.Contains($dispatch)) {

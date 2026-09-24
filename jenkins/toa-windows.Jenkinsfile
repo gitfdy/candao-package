@@ -36,6 +36,7 @@ try {
 }
 '''], fallbackScript: [sandbox: true, script: "return ['Unable to read remote branches:disabled']"]))
     choice(name: 'ENVIRONMENT', choices: ['test-prod', 'pre-prod', 'release', 'debug', 'release-debug'], description: '测试 / 预生产 / 生产 / 调试 / 生产调试；与分支独立选择')
+    booleanParam(name: 'ENABLE_INCIDENT_UPLOAD', defaultValue: false, description: '启用 Incident 故障上报；需管理员配置 TOA_INCIDENT_API_BASE_URL，且所选分支和环境支持')
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
     booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知')
   }
@@ -121,7 +122,7 @@ try {
               }
               'toa-pos' {
                 . "$env:WORKSPACE/jenkins/prepare-toa-build.ps1"
-                Prepare-ToaBuild (Get-Location).Path $env:ENVIRONMENT
+                Prepare-ToaBuild (Get-Location).Path $env:ENVIRONMENT $env:ENABLE_INCIDENT_UPLOAD
                 & cmd.exe /d /c "scripts\\build_windows.bat --type $env:ENVIRONMENT --proxy none --local true"
               }
             }
