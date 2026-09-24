@@ -75,6 +75,7 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
     foreach ($newJob in @('TAPPO-Android', 'TAPPO-PHONE-Android')) {
         [xml]$mobile = Get-Content "$temp/xml/$newJob.xml" -Raw -Encoding UTF8
         Assert ($mobile.SelectSingleNode("//parameterDefinitions/*[name='PACKAGE_FORMAT']/choices/a/string[1]").InnerText -eq 'apk') 'APK must be the default'
+        Assert ($mobile.SelectSingleNode("//parameterDefinitions/*[name='SIGNING_KEY']/credentialType").InnerText -eq 'org.jenkinsci.plugins.plaincredentials.impl.FileCredentialsImpl') 'Signing dropdown must filter to Secret file credentials'
         Assert ($mobile.SelectSingleNode("//parameterDefinitions/*[name='SIGNING_KEY']").LocalName -eq 'com.cloudbees.plugins.credentials.CredentialsParameterDefinition') 'Signing key must use the credentials store'
     }
     [xml]$hpos = Get-Content "$temp/xml/HPOS-Android-Package.xml" -Raw -Encoding UTF8

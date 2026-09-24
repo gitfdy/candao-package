@@ -27,7 +27,7 @@ try {
 '''], fallbackScript: [sandbox: true, script: "return ['Unable to read remote branches:disabled']"]))
     choice(name: 'PACKAGE_FORMAT', choices: ['apk', 'aab'], description: 'APK 可直接安装；AAB 用于商店分发。默认 APK')
     choice(name: 'ENVIRONMENT', choices: ['qc', 'prod'], description: '业务环境，与分支独立；统一使用 Release 编译')
-    credentials(name: 'SIGNING_KEY', credentialType: 'org.jenkinsci.plugins.plaincredentials.FileCredentials', defaultValue: '', required: false, description: '选择已上传的签名密钥；不选则内部测试签名。Tappo Phone AAB 必选原 Google Play 上传密钥')
+    credentials(name: 'SIGNING_KEY', credentialType: 'org.jenkinsci.plugins.plaincredentials.impl.FileCredentialsImpl', defaultValue: '', required: false, description: '选择已上传的签名密钥；不选则内部测试签名。Tappo Phone AAB 必选原 Google Play 上传密钥')
     string(name: 'VERSION_CODE', defaultValue: '', description: '可选 Android versionCode；留空沿用源码，上架时必须高于已发布版本', trim: true)
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并验证成功后上传 DUFS')
     booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '发送钉钉通知；失败不影响构建成功')

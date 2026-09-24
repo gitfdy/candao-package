@@ -121,7 +121,7 @@ foreach ($name in $jobs.Keys) {
     $signing = [regex]::Match($block, "(?m)^    credentials\(name: 'SIGNING_KEY'.*$")
     if ($signing.Success) {
         $parameter = $xml.CreateElement('com.cloudbees.plugins.credentials.CredentialsParameterDefinition')
-        $parameter.InnerXml = '<name>SIGNING_KEY</name><description>Select an uploaded signing key. No key means internal test signing; Tappo Phone AAB requires the original Play upload key.</description><defaultValue/><credentialType>org.jenkinsci.plugins.plaincredentials.FileCredentials</credentialType><required>false</required>'
+        $parameter.InnerXml = '<name>SIGNING_KEY</name><description>Select an uploaded signing key. No key means internal test signing; Tappo Phone AAB requires the original Play upload key.</description><defaultValue/><credentialType>org.jenkinsci.plugins.plaincredentials.impl.FileCredentialsImpl</credentialType><required>false</required>'
         $definitions.AppendChild($parameter) | Out-Null
         $block = $block.Remove($signing.Index, $signing.Length)
     }
