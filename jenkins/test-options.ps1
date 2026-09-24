@@ -52,6 +52,10 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
         Assert ($definition.scm.userRemoteConfigs.'hudson.plugins.git.UserRemoteConfig'.url -eq ((git -C $PSScriptRoot remote get-url origin).Trim() -replace '^(https?://)[^/]*@', '$1')) 'Wrong Git repository'
         $pipeline = Get-Content (Join-Path $PSScriptRoot $definition.scriptPath.Replace('jenkins/', '')) -Raw
         Assert (!$pipeline.Contains('# @include')) 'Unexpanded helper'
+        if ($pipeline.Contains('activeChoice(')) {
+            Assert ($pipeline.Contains('def credentialScope = Jenkins.get()')) 'Global Git credentials must not depend on job names'
+            Assert (!$pipeline.Contains('getItemByFullName(')) 'Branch lookup must not hard-code job names'
+        }
         foreach ($match in [regex]::Matches($pipeline, "(?s)powershell '''(.*?)'''")) {
             $code = $match.Groups[1].Value.Replace('\\', '\').Replace("\'", "'")
             $errors = $null; $tokens = $null

@@ -13,8 +13,8 @@ import hudson.security.ACL
 import com.cloudbees.plugins.credentials.CredentialsProvider
 import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials
 try {
-  def job = Jenkins.get().getItemByFullName('HPOS-Android-Package')
-  def credential = CredentialsProvider.lookupCredentials(StandardUsernamePasswordCredentials.class, job, ACL.SYSTEM, []).find { it.id == 'candao-git-new' }
+  def credentialScope = Jenkins.get()
+  def credential = CredentialsProvider.lookupCredentials(StandardUsernamePasswordCredentials.class, credentialScope, ACL.SYSTEM, []).find { it.id == 'candao-git-new' }
   if (!credential) return ['Git credential unavailable:disabled']
   def url = 'https://git.can-dao.com/flutter-business/flutter-hpos.git'
   def client = org.jenkinsci.plugins.gitclient.Git.with(hudson.model.TaskListener.NULL, new hudson.EnvVars(System.getenv())).using('git').getClient()
