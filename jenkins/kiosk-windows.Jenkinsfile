@@ -153,11 +153,9 @@ try {
             if ($files.Count -lt 1) { throw 'No fresh installer found' }
           }
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          $sha = (git -C source rev-parse --short=12 HEAD).Trim()
           foreach ($file in $files) {
             if ($file.Length -le 0) { throw "Empty installer: $($file.FullName)" }
-            $name = "${env:PROJECT}_${env:ENVIRONMENT}_${sha}_${env:BUILD_NUMBER}_$($file.Name)"
-            $target = Join-Path artifacts $name
+            $target = Join-Path artifacts $file.Name
             Copy-Item -LiteralPath $file.FullName -Destination $target
             Get-FileHash -Algorithm SHA256 -LiteralPath $target | Format-List
           }
