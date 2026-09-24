@@ -1,6 +1,7 @@
 # Offline checks. HTTP is mocked; no Jenkins, DUFS or DingTalk writes.
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot/common.ps1"
+. "$PSScriptRoot/prepare-toa-build.ps1"
 function Assert($condition, [string]$message) { if (!$condition) { throw $message } }
 function Expect-Failure([scriptblock]$action) {
     $failed = $false
@@ -11,6 +12,28 @@ $temp = Join-Path ([IO.Path]::GetTempPath()) ("candao test " + [guid]::NewGuid()
 New-Item -ItemType Directory -Path $temp | Out-Null
 Push-Location $temp
 try {
+    New-Item -ItemType Directory -Path 'adapter/scripts', 'adapter/lib' | Out-Null
+    $fixture = @'
+if "%BUILD_TYPE%"=="release" (
+)
+if "%BUILD_TYPE%"=="pre-prod" (
+)
+if "%BUILD_TYPE%"=="release" goto :build_shorebird_windows
+:build_flutter_windows
+call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
+'@
+    Set-Content adapter/scripts/build_windows.bat $fixture
+    Set-Content adapter/lib/main.dart "const String.fromEnvironment('pre_production');"
+    Prepare-ToaBuild "$temp/adapter" release
+    $adapted = Get-Content adapter/scripts/build_windows.bat -Raw
+    Assert (!$adapted.Contains('goto :build_shorebird_windows')) 'Production must not route to Shorebird'
+    Assert ($adapted.Contains('if errorlevel 1 exit /b 1')) 'Flutter errors must stop packaging'
+    Prepare-ToaBuild "$temp/adapter" pre-prod
+    Set-Content adapter/lib/main.dart '// No pre-production configuration'
+    Expect-Failure { Prepare-ToaBuild "$temp/adapter" pre-prod }
+    Expect-Failure { Prepare-ToaBuild "$temp/adapter" unknown }
+    Set-Content adapter/scripts/build_windows.bat ($fixture.Replace('if "%BUILD_TYPE%"=="release" goto :build_shorebird_windows', 'call shorebird release windows'))
+    Expect-Failure { Prepare-ToaBuild "$temp/adapter" release }
     & "$PSScriptRoot/sync-jobs.ps1" -OutputDirectory "$temp/xml"
     foreach ($file in Get-ChildItem "$temp/xml/*.xml") {
         [xml]$xml = Get-Content $file -Raw -Encoding UTF8
@@ -50,7 +73,7 @@ try {
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='BRANCH']").LocalName -eq 'org.biouno.unochoice.ChoiceParameter') 'TOA branches must be dynamic'
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='REPOSITORY_URL']/choices/a/string").InnerText -eq 'https://git.can-dao.com/flutter-business/toa-pos-flutter.git') 'TOA repository must be a dropdown'
     Assert ($null -eq $toa.SelectSingleNode("//parameterDefinitions/*[name='PROJECT' or name='PRODUCT' or name='DUFS_URL']")) 'TOA internal fields must be hidden'
-    Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='ENVIRONMENT']/choices/a/string").InnerText -eq 'test-prod') 'TOA environment must remain test-prod'
+    Assert (($toa.SelectNodes("//parameterDefinitions/*[name='ENVIRONMENT']/choices/a/string") | ForEach-Object InnerText) -join ',' -eq 'test-prod,pre-prod,release,debug,release-debug') 'TOA environment must remain test-prod'
     [xml]$general = Get-Content "$temp/xml/Candao-Windows-Package.xml" -Raw -Encoding UTF8
     Assert ($general.SelectSingleNode("//parameterDefinitions/*[name='PROJECT']/choices/a/string[1]").InnerText -eq 'queue-screen') 'General task defaults changed'
     & "$PSScriptRoot/sync-jobs.ps1" -RepositoryUrl 'https://example.invalid/package.git' -Branch 'feature/build' -OutputDirectory "$temp/explicit"

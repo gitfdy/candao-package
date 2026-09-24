@@ -35,7 +35,7 @@ try {
   return ['Unable to read remote branches:disabled']
 }
 '''], fallbackScript: [sandbox: true, script: "return ['Unable to read remote branches:disabled']"]))
-    choice(name: 'ENVIRONMENT', choices: ['test-prod'], description: '构建环境；QC 对应 test-prod')
+    choice(name: 'ENVIRONMENT', choices: ['test-prod', 'pre-prod', 'release', 'debug', 'release-debug'], description: '测试 / 预生产 / 生产 / 调试 / 生产调试；与分支独立选择')
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
     booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知')
   }
@@ -48,7 +48,7 @@ try {
           $ErrorActionPreference = 'Stop'
           . "$env:WORKSPACE/jenkins/common.ps1"
           Assert-DeliveryOptions
-          if ($env:ENVIRONMENT -ne 'test-prod') { throw 'Unsupported TOA build environment' }
+          if ($env:ENVIRONMENT -notin @('test-prod', 'pre-prod', 'release', 'debug', 'release-debug')) { throw 'Unsupported TOA build environment' }
         '''
         script {
           if (params.REPOSITORY_URL != 'https://git.can-dao.com/flutter-business/toa-pos-flutter.git') {
@@ -128,6 +128,8 @@ try {
                 & .\\scripts\\build_windows.bat --product $env:PRODUCT --type $env:ENVIRONMENT --local true
               }
               'toa-pos' {
+                . "$env:WORKSPACE/jenkins/prepare-toa-build.ps1"
+                Prepare-ToaBuild (Get-Location).Path $env:ENVIRONMENT
                 & .\\scripts\\build_windows.bat --type $env:ENVIRONMENT --proxy none --local true
               }
             }
