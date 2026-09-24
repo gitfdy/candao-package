@@ -7,17 +7,33 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '20', artifactNumToKeepStr: '20'))
   }
   parameters {
-    string(name: 'REPOSITORY_URL', defaultValue: '', description: '源码仓库 URL 或节点本地路径；留空沿用项目本地仓库', trim: true)
-    string(name: 'BRANCH', defaultValue: '', description: '分支名（如 main）；指定时从远端获取，留空使用仓库默认分支', trim: true)
+    activeChoice(name: 'BRANCH', choiceType: 'PT_SINGLE_SELECT', filterable: true, filterLength: 1, description: 'GitLab 远端分支，可搜索；默认 devlop_qc', script: groovyScript(script: [sandbox: false, script: '''
+import jenkins.model.Jenkins
+import hudson.security.ACL
+import com.cloudbees.plugins.credentials.CredentialsProvider
+import com.cloudbees.plugins.credentials.common.StandardUsernamePasswordCredentials
+try {
+  def job = Jenkins.get().getItemByFullName('HPOS-Android-Package')
+  def credential = CredentialsProvider.lookupCredentials(StandardUsernamePasswordCredentials.class, job, ACL.SYSTEM, []).find { it.id == 'candao-git-new' }
+  if (!credential) return ['Git credential unavailable:disabled']
+  def url = 'https://git.can-dao.com/flutter-business/flutter-hpos.git'
+  def client = org.jenkinsci.plugins.gitclient.Git.with(hudson.model.TaskListener.NULL, new hudson.EnvVars(System.getenv())).using('git').getClient()
+  client.addCredentials(url, credential)
+  def branches = client.getRemoteReferences(url, 'refs/heads/*', true, false).keySet().collect { it.replaceFirst('^refs/heads/', '') }.sort()
+  return branches ? branches.collect { it == 'devlop_qc' ? it + ':selected' : it } : ['No remote branches:disabled']
+} catch (Exception ignored) {
+  return ['Unable to read remote branches:disabled']
+}
+'''], fallbackScript: [sandbox: true, script: "return ['Unable to read remote branches:disabled']"]))
     booleanParam(name: 'UPLOAD_DUFS', defaultValue: false, description: '构建并归档成功后上传 DUFS')
-    string(name: 'DUFS_URL', defaultValue: '', description: 'DUFS 目标目录完整 URL；开启上传时必填', trim: true)
     booleanParam(name: 'SEND_DINGTALK', defaultValue: false, description: '构建成功后发送钉钉通知；可独立于 DUFS 开启')
     choice(name: 'BUILD_TYPE', choices: ['test-prod', 'pre-prod', 'release', 'debug'], description: 'Application environment and Flutter build mode')
   }
   environment {
     DUFS_CREDENTIALS_ID = 'dufs'
     DINGTALK_CREDENTIALS_ID = 'dingtalk-webhook'
-    SOURCE_REPO = 'D:\\work\\flutter-hpos'
+    SOURCE_REPO = 'https://git.can-dao.com/flutter-business/flutter-hpos.git'
+    DUFS_URL = 'http://192.168.225.46:5000/dufs/HANDHELP_POS'
     FLUTTER_STORAGE_BASE_URL = 'https://storage.flutter-io.cn'
     PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
     PUB_CACHE = 'C:\\Users\\Administrator\\AppData\\Local\\Pub\\Cache'
@@ -32,8 +48,16 @@ pipeline {
           $ErrorActionPreference = 'Stop'
           . "$env:WORKSPACE/jenkins/common.ps1"
           Assert-DeliveryOptions
-          Checkout-Source $env:SOURCE_REPO
+
         '''
+        script {
+          if (!params.BRANCH || !(params.BRANCH ==~ /[A-Za-z0-9][A-Za-z0-9._\/-]*/) || params.BRANCH.contains('..')) {
+            error('Select a valid remote branch before building')
+          }
+          dir('source') {
+            checkout([$class: 'GitSCM', branches: [[name: "refs/heads/${params.BRANCH}"]], userRemoteConfigs: [[url: env.SOURCE_REPO, credentialsId: 'candao-git-new']], extensions: []])
+          }
+        }
       }
     }
     stage('Preflight') {

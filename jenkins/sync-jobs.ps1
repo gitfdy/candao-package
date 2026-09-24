@@ -3,6 +3,7 @@ param(
     [string]$RepositoryUrl,
     [string]$Branch,
     [string]$CredentialsId = '',
+    [string[]]$JobName,
     # Render XML locally without contacting Jenkins or requiring credentials.
     [string]$OutputDirectory
 )
@@ -47,6 +48,7 @@ if (!$OutputDirectory) {
 }
 
 foreach ($name in $jobs.Keys) {
+    if ($JobName -and $name -notin $JobName) { continue }
     $path = Join-Path $PSScriptRoot $jobs[$name]
     $source = Get-Content -LiteralPath $path -Raw -Encoding UTF8
     if ($source.Contains('# @include common.ps1')) { throw "Unresolved include in $path" }
@@ -102,6 +104,16 @@ foreach ($name in $jobs.Keys) {
     # Keep Jenkins' form and Pipeline defaults in one source. Reject unfamiliar declarations.
     $block = [regex]::Match($source, '(?s)  parameters \{\s*\n(.*?)\n  \}').Groups[1].Value
     if (!$block) { throw "No parameters found in $path" }
+    $dynamic = [regex]::Match($block, "(?sm)^    activeChoice\(name: 'BRANCH'.*?fallbackScript:.*?\)\)\s*$")
+    if ($dynamic.Success) {
+        $branchScript = [regex]::Match($dynamic.Value, "(?s)script: '''(.*?)'''").Groups[1].Value
+        $parameter = $xml.CreateElement('org.biouno.unochoice.ChoiceParameter')
+        $parameter.SetAttribute('plugin', 'uno-choice')
+        $parameter.InnerXml = '<name>BRANCH</name><description>GitLab remote branches; searchable, defaults to devlop_qc</description><randomName>hpos-remote-branch</randomName><visibleItemCount>10</visibleItemCount><choiceType>PT_SINGLE_SELECT</choiceType><filterable>true</filterable><filterLength>1</filterLength><script class="org.biouno.unochoice.model.GroovyScript"><secureScript><script/><sandbox>false</sandbox></secureScript><secureFallbackScript><script>return ["Unable to read remote branches:disabled"]</script><sandbox>true</sandbox></secureFallbackScript></script>'
+        $parameter.SelectSingleNode('script/secureScript/script').InnerText = $branchScript
+        $definitions.AppendChild($parameter) | Out-Null
+        $block = $block.Remove($dynamic.Index, $dynamic.Length)
+    }
     foreach ($line in ($block -split '\r?\n')) {
         if (!$line.Trim()) { continue }
         $match = [regex]::Match($line.Trim(), "^(string|choice|booleanParam)\(name: '([^']+)', (defaultValue|choices): (.*), description: '([^']*)'(, trim: true)?\)$")

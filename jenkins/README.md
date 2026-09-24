@@ -69,3 +69,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\jenkins\sync-jobs.ps1 -Out
 用户提供的打包契约文档基于 `feature/flutter-native-migration-followup@eb7f9024`，与 QC 分支不同；本入口按实际 QC 脚本运行 `build_windows.bat --type test-prod --proxy none --local true`。当前仅支持该无发布的构建类型，避免新版脚本的 `release` 即使 local=true 仍调用 Shorebird。
 
 构建成功后在此独立任务的 Artifacts 下载 TOA POS EXE；原 `Candao-Windows-Package` 的排队机历史产物保留。
+
+## 手持 POS 构建表单
+
+HPOS 固定使用公司远端 `flutter-hpos.git`，凭据为 `candao-git-new`。表单仅显示 `BRANCH`、`BUILD_TYPE`、`UPLOAD_DUFS`、`SEND_DINGTALK`；两个分发开关默认关闭。DUFS 目录固定为原脚本的 `http://192.168.225.46:5000/dufs/HANDHELP_POS`。上传和通知仍需管理员分别配置 `dufs`（用户名密码）及 `dingtalk-webhook`（Secret text）。
+
+分支使用 Active Choices（`uno-choice`）插件，在打开参数页时通过 Jenkins Git 客户端读取远端全部分支，支持搜索，默认选择 `devlop_qc`。认证或网络失败时显示禁用的错误选项，不回退到开发目录。分支脚本固定仓库和凭据，不接受页面传入的 URL，也不输出密钥。首次同步或修改分支脚本后，管理员须在 In-process Script Approval 审核并批准这段精确脚本；无需开放通用 Groovy 权限。
+
+只同步此任务配置（不编译、不上传、不通知）：`./jenkins/sync-jobs.ps1 -JobName HPOS-Android-Package`。不要对用户重命名过的其他任务盲目执行全量同步。

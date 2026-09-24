@@ -15,7 +15,7 @@ try {
     foreach ($file in Get-ChildItem "$temp/xml/*.xml") {
         [xml]$xml = Get-Content $file -Raw -Encoding UTF8
         $parameters = $xml.SelectNodes('//parameterDefinitions/*')
-        foreach ($name in @('REPOSITORY_URL', 'BRANCH', 'UPLOAD_DUFS', 'SEND_DINGTALK')) {
+        foreach ($name in @('BRANCH', 'UPLOAD_DUFS', 'SEND_DINGTALK')) {
             Assert ($name -in $parameters.name) "Missing parameter: $name"
         }
         Assert ($xml.SelectSingleNode("//parameterDefinitions/*[name='UPLOAD_DUFS']/defaultValue").InnerText -eq 'false') 'Upload must default off'
@@ -43,6 +43,9 @@ try {
         Assert ($pipeline.Contains('credentialsId: env.DUFS_CREDENTIALS_ID')) 'DUFS binding must use configured credential'
         Assert ($pipeline.Contains('credentialsId: env.DINGTALK_CREDENTIALS_ID')) 'DingTalk binding must use configured credential'
     }
+    [xml]$hpos = Get-Content "$temp/xml/HPOS-Android-Package.xml" -Raw -Encoding UTF8
+    Assert ($null -eq $hpos.SelectSingleNode("//parameterDefinitions/*[name='DUFS_URL' or name='REPOSITORY_URL']")) 'HPOS infrastructure fields must be hidden'
+    Assert ($hpos.SelectSingleNode("//parameterDefinitions/*[name='BRANCH']").LocalName -eq 'org.biouno.unochoice.ChoiceParameter') 'HPOS branches must be dynamic'
     [xml]$toa = Get-Content "$temp/xml/TOA-POS-Windows-Package.xml" -Raw -Encoding UTF8
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='DUFS_URL']/defaultValue").InnerText -eq 'http://192.168.225.46:5000/dufs/TOA-POS-Windows') 'TOA upload directory must match its QC build script'
     Assert ($toa.SelectSingleNode("//parameterDefinitions/*[name='BRANCH']/defaultValue").InnerText -eq 'devlop_qc') 'TOA must default to the QC branch'
