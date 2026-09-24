@@ -53,6 +53,10 @@ try {
           dir('source') {
             checkout([$class: 'GitSCM', branches: [[name: "refs/heads/${params.BRANCH}"]], userRemoteConfigs: [[url: env.SOURCE_REPO, credentialsId: 'candao-git-new']], extensions: []])
           }
+          // core_payment resolves ../../../kpay relative to source/packages/core_payment.
+          dir('kpay') {
+            checkout([$class: 'GitSCM', branches: [[name: 'refs/heads/main']], userRemoteConfigs: [[url: 'https://git.can-dao.com/flutter-business/kpay.git', credentialsId: 'candao-git-new']], extensions: []])
+          }
         }
       }
     }
