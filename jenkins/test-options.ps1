@@ -67,6 +67,7 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
         Assert ($pipeline.Contains('credentialsId: env.DINGTALK_CREDENTIALS_ID')) 'DingTalk binding must use configured credential'
     }
     [xml]$hpos = Get-Content "$temp/xml/HPOS-Android-Package.xml" -Raw -Encoding UTF8
+    Assert ((Get-Content "$PSScriptRoot/kiosk-windows.Jenkinsfile" -Raw).Contains("name: 'refs/heads/v3.8.1-TA'")) 'Kiosk requires the Octopus TOA-compatible interfaces'
     [xml]$kiosk = Get-Content "$temp/xml/TOA-KIOSK-WINDOWS.xml" -Raw -Encoding UTF8
     Assert ($kiosk.SelectSingleNode('//definition/scriptPath').InnerText -eq 'jenkins/kiosk-windows.Jenkinsfile') 'Kiosk must use Windows pipeline'
     Assert ($null -eq $kiosk.SelectSingleNode("//parameterDefinitions/*[name='DUFS_URL' or name='PROJECT']")) 'Kiosk infrastructure fields must be hidden'

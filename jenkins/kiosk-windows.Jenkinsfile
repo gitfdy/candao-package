@@ -58,7 +58,7 @@ try {
             checkout([$class: 'GitSCM', branches: [[name: "refs/heads/${params.BRANCH}"]], userRemoteConfigs: [[url: params.REPOSITORY_URL, credentialsId: 'candao-git-new']], extensions: []])
           }
           dir('octopus_payment_flutter') {
-            checkout([$class: 'GitSCM', branches: [[name: 'refs/heads/main']], userRemoteConfigs: [[url: 'https://git.can-dao.com/flutter-business/octopus_payment_flutter.git', credentialsId: 'candao-git-new']], extensions: []])
+            checkout([$class: 'GitSCM', branches: [[name: 'refs/heads/v3.8.1-TA']], userRemoteConfigs: [[url: 'https://git.can-dao.com/flutter-business/octopus_payment_flutter.git', credentialsId: 'candao-git-new']], extensions: []])
           }
         }
       }
