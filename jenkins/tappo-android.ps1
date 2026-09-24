@@ -116,14 +116,6 @@ function Invoke-TappoAndroidBuild {
         }
         Push-Location $app
         try {
-            for ($attempt = 1; $attempt -le 3; $attempt++) {
-                $ErrorActionPreference = 'Continue'
-                & $flutter precache --android
-                $ErrorActionPreference = 'Stop'
-                if ($LASTEXITCODE -eq 0) { break }
-                if ($attempt -lt 3) { Start-Sleep -Seconds 10 }
-            }
-            if ($LASTEXITCODE -ne 0) { throw 'Flutter Android artifact download failed after three attempts' }
             $ErrorActionPreference = 'Continue'
             & $flutter pub get
             $ErrorActionPreference = 'Stop'
