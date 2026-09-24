@@ -88,8 +88,6 @@ try {
     }
     stage('Build installer') {
       environment {
-        // The TOA runner contains UTF-8 source; Windows nodes may use code page 936.
-        CL = '/utf-8'
         // CMake downloads do not use the Windows desktop or Git proxy settings.
         HTTPS_PROXY = 'http://127.0.0.1:7897'
         HTTP_PROXY = 'http://127.0.0.1:7897'

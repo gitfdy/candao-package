@@ -7,6 +7,8 @@ function Prepare-ToaBuild(
     if ($Environment -notin @('test-prod', 'pre-prod', 'release', 'debug', 'release-debug')) {
         throw 'Unsupported TOA environment'
     }
+    # MSVC otherwise reads UTF-8 runner sources using the node code page (often 936).
+    $env:CL = "$env:CL /utf-8".Trim()
     $path = Join-Path $SourceDirectory 'scripts/build_windows.bat'
     $script = [IO.File]::ReadAllText($path)
     if (!$script.Contains('"' + $Environment + '" (')) {
