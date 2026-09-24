@@ -87,3 +87,5 @@ HPOS 固定使用公司远端 `flutter-hpos.git`，凭据为 `candao-git-new`。
 TOA 专用入口现开放 `test-prod`（测试）、`pre-prod`（预生产）、`release`（生产）、`debug`、`release-debug`，与 Git 分支独立选择。构建只在 Jenkins 临时源码中适配原 BAT，保留各分支的安装器逻辑；已识别的新版 release 跳转改为普通 Flutter 编译，不执行 Shorebird release。仍传入 `--local true`，分发仅由流水线两个开关控制。
 
 若所选源码未实现环境参数、已删除对应 Dart 环境入口，或出现不认识的发布入口，则明确失败，不静默改环境。此调整不承诺任意历史分支都能成功编译，也不恢复应用源码已删除的预生产配置。
+
+TOA Windows SDK 按所选源码提交的 `.fvmrc` 选择 `D:\work\candao-package\.jenkins-sdk\flutter-<version>`；未提交版本配置的旧 QC 源码使用 Flutter 3.27.2，避免旧 `flex_color_scheme` 与 3.41 API 不兼容。SDK 必须预先安装，缺失时直接报错。八达通从远端 `v3.8.1-TA` 分支检出，该分支提供 TOA 所用的 reader/reconnect 接口；不再使用缺少接口的 main。完整构建兼容性仍以具体分支实测为准。

@@ -68,22 +68,14 @@ try {
           if (!(Test-Path -LiteralPath 'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe')) { throw 'Inno Setup 6 is missing' }
           if ($env:PROJECT -ne 'queue-screen') {
             if (!(Get-Command fvm -ErrorAction SilentlyContinue)) { throw 'FVM is missing' }
-            $sdk = switch ($env:PROJECT) {
-              'self-checkout' { 'D:\\work\\self-checkout\\.fvm\\flutter_sdk' }
-              'toa-pos' { 'D:\\work\\candao-package\\.jenkins-sdk\\flutter-3.41.9' }
-            }
-            if (!(Test-Path -LiteralPath "$sdk\\bin\\flutter.bat")) { throw "Flutter SDK missing: $sdk" }
             Push-Location source
             try {
-              if (Test-Path -LiteralPath '.fvmrc') {
-                $requiredVersion = (Get-Content -LiteralPath '.fvmrc' -Raw | ConvertFrom-Json).flutter
-              } elseif ($env:PROJECT -eq 'toa-pos') {
-                # Older TOA branches do not commit FVM metadata; use the configured CI SDK.
-                $requiredVersion = '3.41.9'
-                Write-Output 'No committed .fvmrc; using configured TOA CI SDK 3.41.9'
-              } else {
-                throw 'Source repository must commit .fvmrc'
-              }
+              $requiredVersion = if (Test-Path -LiteralPath '.fvmrc') {
+                (Get-Content -LiteralPath '.fvmrc' -Raw | ConvertFrom-Json).flutter
+              } else { '3.27.2' }
+              if ($requiredVersion -notmatch '^[0-9]+[.][0-9]+[.][0-9]+$') { throw 'Invalid Flutter version in .fvmrc' }
+              $sdk = "D:\\work\\candao-package\\.jenkins-sdk\\flutter-$requiredVersion"
+              if (!(Test-Path -LiteralPath "$sdk\\bin\\flutter.bat")) { throw "Install the required CI Flutter SDK: $sdk" }
               $actualVersion = (& git -C $sdk describe --tags --exact-match).Trim()
               if ($LASTEXITCODE -ne 0 -or $actualVersion -ne $requiredVersion) { throw "Flutter SDK mismatch: required $requiredVersion, found $actualVersion" }
               New-Item -ItemType Directory -Force -Path '.fvm' | Out-Null
@@ -130,7 +122,7 @@ try {
               'toa-pos' {
                 . "$env:WORKSPACE/jenkins/prepare-toa-build.ps1"
                 Prepare-ToaBuild (Get-Location).Path $env:ENVIRONMENT
-                & .\\scripts\\build_windows.bat --type $env:ENVIRONMENT --proxy none --local true
+                & cmd.exe /d /c "scripts\\build_windows.bat --type $env:ENVIRONMENT --proxy none --local true"
               }
             }
             if ($LASTEXITCODE -ne 0) { throw "Installer build failed: $LASTEXITCODE" }

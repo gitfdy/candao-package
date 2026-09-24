@@ -11,7 +11,7 @@ def call(String repository, String branch) {
   }
   def repositories = [
     [directory: 'source', url: repository, branch: branch],
-    [directory: 'octopus_payment_flutter', url: 'https://git.can-dao.com/flutter-business/octopus_payment_flutter.git', branch: 'main']
+    [directory: 'octopus_payment_flutter', url: 'https://git.can-dao.com/flutter-business/octopus_payment_flutter.git', branch: 'v3.8.1-TA']
   ]
   for (def repo in repositories) {
     dir(repo.directory) {

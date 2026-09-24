@@ -14,7 +14,7 @@ assert calls*.config*.userRemoteConfigs.flatten()*.credentialsId == ['candao-git
 assert calls[0].config.userRemoteConfigs[0].url == 'https://git.can-dao.com/flutter-business/toa-pos-flutter.git'
 assert calls[0].config.branches[0].name == 'refs/heads/devlop_qc'
 assert calls[1].config.userRemoteConfigs[0].url == 'https://git.can-dao.com/flutter-business/octopus_payment_flutter.git'
-assert calls[1].config.branches[0].name == 'refs/heads/main'
+assert calls[1].config.branches[0].name == 'refs/heads/v3.8.1-TA'
 calls.clear()
 pipeline.call('https://git.can-dao.com/flutter-business/toa-pos-flutter.git', 'feature/build')
 assert calls[0].config.branches[0].name == 'refs/heads/feature/build'
