@@ -28,7 +28,7 @@ if ($Branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $Branch.Contains('..')
 $jobs = @{
     'HPOS-Android-Package' = 'hpos.Jenkinsfile'
     'Candao-Windows-Package' = 'windows.Jenkinsfile'
-    'TOA-POS-Windows-Package' = 'windows.Jenkinsfile'
+    'TOA-POS-Windows' = 'toa-windows.Jenkinsfile'
     'Candao-Android-Package' = 'android.Jenkinsfile'
 }
 
@@ -87,7 +87,7 @@ foreach ($name in $jobs.Keys) {
         $newDefinition.AppendChild($element) | Out-Null
     }
     $xml.DocumentElement.ReplaceChild($newDefinition, $oldDefinition) | Out-Null
-    if ($name -eq 'TOA-POS-Windows-Package') {
+    if ($name -eq 'TOA-POS-Windows') {
         $xml.SelectSingleNode('/flow-definition/description').InnerText = 'TOA POS Flutter Windows installer. QC branch: devlop_qc; build type: test-prod. Source and Octopus dependency are checked out from private remote Git repositories using candao-git-new credentials. DUFS and DingTalk are optional and default off.'
     }
     $properties = $xml.SelectSingleNode('/flow-definition/properties')
@@ -109,7 +109,7 @@ foreach ($name in $jobs.Keys) {
         $branchScript = [regex]::Match($dynamic.Value, "(?s)script: '''(.*?)'''").Groups[1].Value
         $parameter = $xml.CreateElement('org.biouno.unochoice.ChoiceParameter')
         $parameter.SetAttribute('plugin', 'uno-choice')
-        $parameter.InnerXml = '<name>BRANCH</name><description>GitLab remote branches; searchable, defaults to devlop_qc</description><randomName>hpos-remote-branch</randomName><visibleItemCount>10</visibleItemCount><choiceType>PT_SINGLE_SELECT</choiceType><filterable>true</filterable><filterLength>1</filterLength><script class="org.biouno.unochoice.model.GroovyScript"><secureScript><script/><sandbox>false</sandbox></secureScript><secureFallbackScript><script>return ["Unable to read remote branches:disabled"]</script><sandbox>true</sandbox></secureFallbackScript></script>'
+        $parameter.InnerXml = '<name>BRANCH</name><description>GitLab remote branches; searchable, defaults to devlop_qc</description><randomName>remote-branch</randomName><visibleItemCount>10</visibleItemCount><choiceType>PT_SINGLE_SELECT</choiceType><filterable>true</filterable><filterLength>1</filterLength><script class="org.biouno.unochoice.model.GroovyScript"><secureScript><script/><sandbox>false</sandbox></secureScript><secureFallbackScript><script>return ["Unable to read remote branches:disabled"]</script><sandbox>true</sandbox></secureFallbackScript></script>'
         $parameter.SelectSingleNode('script/secureScript/script').InnerText = $branchScript
         $definitions.AppendChild($parameter) | Out-Null
         $block = $block.Remove($dynamic.Index, $dynamic.Length)

@@ -77,3 +77,9 @@ HPOS 固定使用公司远端 `flutter-hpos.git`，凭据为 `candao-git-new`。
 分支使用 Active Choices（`uno-choice`）插件，在打开参数页时通过 Jenkins Git 客户端读取远端全部分支，支持搜索，默认选择 `devlop_qc`。认证或网络失败时显示禁用的错误选项，不回退到开发目录。分支脚本固定仓库和凭据，不接受页面传入的 URL，也不输出密钥。首次同步或修改分支脚本后，管理员须在 In-process Script Approval 审核并批准这段精确脚本；无需开放通用 Groovy 权限。
 
 只同步此任务配置（不编译、不上传、不通知）：`./jenkins/sync-jobs.ps1 -JobName HPOS-Android-Package`。不要对用户重命名过的其他任务盲目执行全量同步。
+
+## TOA Windows 精简表单
+
+现有任务 `TOA-POS-Windows` 从远端 `main` 读取 `jenkins/toa-windows.Jenkinsfile`。仓库使用下拉，当前只列已确认的 TOA 仓库；分支使用 Active Choices 实时读取该仓库，默认 `devlop_qc`。构建环境保持 `test-prod`，固定项目及 DUFS 地址不再出现在表单。上传、钉钉通知保留独立开关，默认关闭，继续引用 Jenkins 的 `dufs`、`dingtalk-webhook`。
+
+只同步该任务：`./jenkins/sync-jobs.ps1 -JobName TOA-POS-Windows`。首次同步后审核批准分支查询脚本。此修改不解决此前 QC 源码与 Flutter/八达通依赖的编译兼容问题。
