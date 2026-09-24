@@ -48,7 +48,7 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
         }
         $definition = $xml.SelectSingleNode('//definition')
         Assert ($definition.GetAttribute('class') -eq 'org.jenkinsci.plugins.workflow.cps.CpsScmFlowDefinition') 'Pipeline must load from Git SCM'
-        Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('TOA-KIOSK-WINDOWS', 'kiosk-windows').Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('TOA-POS-Windows', 'toa-windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
+        Assert ($definition.scriptPath -eq "jenkins/$($file.BaseName.Replace('TAPPO-PHONE-Android', 'tappo-phone-android').Replace('TAPPO-Android', 'tappo-android').Replace('TOA-KIOSK-WINDOWS', 'kiosk-windows').Replace('HPOS-Android-Package', 'hpos').Replace('Candao-Windows-Package', 'windows').Replace('TOA-POS-Windows', 'toa-windows').Replace('Candao-Android-Package', 'android')).Jenkinsfile") 'Wrong Jenkinsfile path'
         Assert ($definition.scm.userRemoteConfigs.'hudson.plugins.git.UserRemoteConfig'.url -eq ((git -C $PSScriptRoot remote get-url origin).Trim() -replace '^(https?://)[^/]*@', '$1')) 'Wrong Git repository'
         $pipeline = Get-Content (Join-Path $PSScriptRoot $definition.scriptPath.Replace('jenkins/', '')) -Raw
         Assert (!$pipeline.Contains('# @include')) 'Unexpanded helper'
@@ -71,6 +71,11 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
         Assert ($pipeline.Contains("DINGTALK_CREDENTIALS_ID = 'dingtalk-webhook'")) 'Missing fixed DingTalk credential'
         Assert ($pipeline.Contains('credentialsId: env.DUFS_CREDENTIALS_ID')) 'DUFS binding must use configured credential'
         Assert ($pipeline.Contains('credentialsId: env.DINGTALK_CREDENTIALS_ID')) 'DingTalk binding must use configured credential'
+    }
+    foreach ($newJob in @('TAPPO-Android', 'TAPPO-PHONE-Android')) {
+        [xml]$mobile = Get-Content "$temp/xml/$newJob.xml" -Raw -Encoding UTF8
+        Assert ($mobile.SelectSingleNode("//parameterDefinitions/*[name='PACKAGE_FORMAT']/choices/a/string[1]").InnerText -eq 'apk') 'APK must be the default'
+        Assert ($mobile.SelectSingleNode("//parameterDefinitions/*[name='SIGNING_KEY']").LocalName -eq 'com.cloudbees.plugins.credentials.CredentialsParameterDefinition') 'Signing key must use the credentials store'
     }
     [xml]$hpos = Get-Content "$temp/xml/HPOS-Android-Package.xml" -Raw -Encoding UTF8
     Assert ((Get-Content "$PSScriptRoot/kiosk-windows.Jenkinsfile" -Raw).Contains("name: 'refs/heads/v3.8.1-TA'")) 'Kiosk requires the Octopus TOA-compatible interfaces'
@@ -197,12 +202,15 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
         $script:httpMethods += $Method
         if ($OutFile) {
             if ($script:corruptDownload) { [IO.File]::WriteAllText($OutFile, 'corrupt') }
-            else { Copy-Item artifacts/test.apk $OutFile }
+            else { Copy-Item (Get-ChildItem artifacts -File | Select-Object -First 1).FullName $OutFile }
         }
     }
     Publish-Artifacts
     Assert ($script:httpMethods.Count -eq 2 -and $script:httpMethods[0] -eq 'Put') 'Expected PUT and verification GET'
     Assert (Test-Path dufs-links.txt) 'Missing verified download link'
+    Move-Item artifacts/test.apk artifacts/test.aab
+    Publish-Artifacts
+    Assert ((Get-Content dufs-links.txt -Raw).Contains('test.aab')) 'AAB must be uploaded and verified'
     $script:corruptDownload = $true
     Expect-Failure { Publish-Artifacts }
     # Notify without uploading; reject DingTalk application errors even on HTTP success.

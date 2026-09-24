@@ -46,7 +46,7 @@ function Assert-DeliveryOptions {
 
 function Publish-Artifacts {
     Assert-DeliveryOptions
-    $files = @(Get-ChildItem -LiteralPath artifacts -File | Where-Object { $_.Extension -in @('.apk', '.exe') })
+    $files = @(Get-ChildItem -LiteralPath artifacts -File | Where-Object { $_.Extension -in @('.apk', '.aab', '.exe') })
     if (!$files.Count) { throw 'No artifacts to upload' }
     $auth = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("${env:DUFS_USER}:${env:DUFS_PASSWORD}"))
     $headers = @{ Authorization = "Basic $auth" }

@@ -97,3 +97,37 @@ TOA Windows SDK 按所选源码提交的 `.fvmrc` 选择 `D:\work\candao-package
 DUFS 根据产品使用 Kiosk-Windows 或 Self-Checkout-Windows 目录；地址与凭据隐藏，上传和通知独立勾选且默认关闭。源码和八达通 v3.8.1-TA 依赖检出到 Jenkins 工作区。SDK 沿用节点 self-checkout 配置的 FVM SDK；源码缺少 .fvmrc 时仅在 Jenkins 工作区写入该 SDK 的实际版本，已声明版本则检查匹配。调用原 Windows 脚本并传入 --local true，保留原产品包装逻辑。
 
 仅同步此任务：`./jenkins/sync-jobs.ps1 -JobName TOA-KIOSK-WINDOWS`。动态分支脚本需管理员审核批准。此次参数优化不等于已验证所有分支能成功打包。
+
+## Tappo / Tappo Phone Android
+
+新增 `TAPPO-Android`、`TAPPO-PHONE-Android`。分别加载 `tappo-android.Jenkinsfile`、`tappo-phone-android.Jenkinsfile`，每次从远端 Git 获取 Pipeline 及所选分支，在独立 Jenkins 工作区构建；不使用开发源码目录。Phone 保留整个 monorepo，App 位于 `apps/mobile`。
+
+- `PACKAGE_FORMAT`：apk（默认）/ aab。两种格式都用 Release 编译；APK 是 office 渠道，AAB 是 store 渠道并移除安装其他 APK 的权限。
+- `ENVIRONMENT`：Tappo 为 qc/beta/gray/release；Phone 为 qc/prod。环境与分支独立。Google Play 正式包选择 Phone + prod + aab。
+- `VERSION_CODE`：可选正整数，留空用源码版本；Play 更新须自行填写高于已上传版本的号码。
+- `SIGNING_KEY`：Jenkins Secret file 凭据下拉，先在凭据库上传 JKS，然后构建时选择。列表只存凭据引用，不把密钥放进 Git 或普通构建参数。留空使用每个项目独立、持久的内部 Android Debug 证书；仍编译 Release，文件名带 `internal`，不能上架或覆盖不同证书签名的已安装应用。
+- **Phone AAB 禁止内部签名**：未选择原上传金钥立即失败。选择密钥时，构建前核对证书 SHA-256，构建后再验证 APK/AAB 签名。Phone APK 也可选择同一密钥以保持更新兼容。
+- 上传 DUFS、钉钉通知各自勾选，默认关闭。通知失败不影响成功状态。不自动上传 Google Play、OSS 或 Shorebird。
+
+### 上传签名密钥一次，之后在构建页选择
+
+在 Jenkins → Manage Jenkins → Credentials → System → Global 添加以下凭据。以 `tappo-phone-upload` 为密钥 ID；其他名称也可，但配套 ID 必须一致：
+
+| 类型 | ID | 内容 |
+| --- | --- | --- |
+| Secret file | `tappo-phone-upload` | 原 Google Play 上传密钥 JKS 文件 |
+| Username with password | `tappo-phone-upload-passwords` | Username 填 key alias，Password 填 keystore/store password |
+| Secret text | `tappo-phone-upload-key-password` | 私钥密码；与 store password 相同也需填入 |
+| Secret text | `tappo-phone-upload-sha256` | Play Console → 应用完整性 → **上传密钥证书** SHA-256（不是 Google 托管的应用签名证书）；接受冒号分隔 |
+
+凭据配置完成后，在构建页 `SIGNING_KEY` 选择 `tappo-phone-upload`。不可新生成密钥替代已有上传密钥；更换上传密钥需先完成 Google Play 对应流程。密码只放在凭据库。
+
+内部测试密钥位于 Jenkins Home 的 `ci-signing/<project>/debug.keystore`，应随 Jenkins 数据备份，避免重装后签名变化。不选正式密钥的 Tappo AAB 仅用于内部测试，不可用于 Play 发布。
+
+### 节点及验证
+
+使用源码 `.fvmrc` 指定的 Flutter，优先 `D:\work\candao-package\.jenkins-sdk\flutter-<version>`；已核验同版本时可复用 self-checkout 的 SDK（只读开发项目的 SDK，不读其应用源码）。构建持有相应 SDK 锁。Gradle Home 隔离到本任务源码目录；JDK 为节点现有 21.0.12.1，Android SDK 沿用节点配置。
+
+运行 `jenkins/test-tappo-android.ps1` 验证环境/格式、版本号、签名要求及密码转义；`jenkins/test-options.ps1` 验证参数渲染和 APK/AAB 分发校验。
+
+仅同步新任务：`./jenkins/sync-jobs.ps1 -JobName TAPPO-Android,TAPPO-PHONE-Android`。无需全量同步旧任务，也不会启动构建。参数和脚本验证不代表已完成真实 Android 编译；正式 Phone AAB 还需要上传签名凭据后验证。

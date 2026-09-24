@@ -26,6 +26,8 @@ if ($Branch -notmatch '^[A-Za-z0-9][A-Za-z0-9._/-]*$' -or $Branch.Contains('..')
     throw 'Invalid pipeline Git branch'
 }
 $jobs = @{
+    'TAPPO-Android' = 'tappo-android.Jenkinsfile'
+    'TAPPO-PHONE-Android' = 'tappo-phone-android.Jenkinsfile'
     'TOA-KIOSK-WINDOWS' = 'kiosk-windows.Jenkinsfile'
     'HPOS-Android-Package' = 'hpos.Jenkinsfile'
     'Candao-Windows-Package' = 'windows.Jenkinsfile'
@@ -115,6 +117,13 @@ foreach ($name in $jobs.Keys) {
         $parameter.SelectSingleNode('script/secureScript/script').InnerText = $branchScript
         $definitions.AppendChild($parameter) | Out-Null
         $block = $block.Remove($dynamic.Index, $dynamic.Length)
+    }
+    $signing = [regex]::Match($block, "(?m)^    credentials\(name: 'SIGNING_KEY'.*$")
+    if ($signing.Success) {
+        $parameter = $xml.CreateElement('com.cloudbees.plugins.credentials.CredentialsParameterDefinition')
+        $parameter.InnerXml = '<name>SIGNING_KEY</name><description>Select an uploaded signing key. No key means internal test signing; Tappo Phone AAB requires the original Play upload key.</description><defaultValue/><credentialType>org.jenkinsci.plugins.plaincredentials.FileCredentials</credentialType><required>false</required>'
+        $definitions.AppendChild($parameter) | Out-Null
+        $block = $block.Remove($signing.Index, $signing.Length)
     }
     foreach ($line in ($block -split '\r?\n')) {
         if (!$line.Trim()) { continue }
