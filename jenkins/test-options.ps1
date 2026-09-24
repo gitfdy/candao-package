@@ -61,6 +61,8 @@ call %FLUTTER_CMD% build windows --%BUILD_MODE% %BUILD_PARAMS%
         Assert ($pipeline.IndexOf("stage('Verify and archive')") -lt $pipeline.IndexOf("stage('Upload DUFS')")) 'Archive before upload'
         Assert ($pipeline.Contains('when { expression { params.UPLOAD_DUFS } }')) 'Missing upload guard'
         Assert ($pipeline.Contains('when { expression { params.SEND_DINGTALK } }')) 'Missing notification guard'
+        $notification = $pipeline.Substring($pipeline.IndexOf("stage('Notify DingTalk')"))
+        Assert ($notification -match "(?s)catchError\(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', catchInterruptions: false,.*?\{\s+withCredentials") 'Notification failures must not fail the build; manual aborts must propagate'
         Assert ($pipeline.Contains("DUFS_CREDENTIALS_ID = 'dufs'")) 'Missing fixed DUFS credential'
         Assert ($pipeline.Contains("DINGTALK_CREDENTIALS_ID = 'dingtalk-webhook'")) 'Missing fixed DingTalk credential'
         Assert ($pipeline.Contains('credentialsId: env.DUFS_CREDENTIALS_ID')) 'DUFS binding must use configured credential'

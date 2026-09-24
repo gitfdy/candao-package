@@ -143,12 +143,14 @@ try {
     stage('Notify DingTalk') {
       when { expression { params.SEND_DINGTALK } }
       steps {
-        withCredentials([string(credentialsId: env.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
-          powershell '''
-            $ErrorActionPreference = 'Stop'
-            . "$env:WORKSPACE/jenkins/common.ps1"
-            Send-BuildNotification
-          '''
+        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', catchInterruptions: false, message: 'DingTalk notification failed; package result is unchanged') {
+          withCredentials([string(credentialsId: env.DINGTALK_CREDENTIALS_ID, variable: 'DINGTALK_WEBHOOK')]) {
+            powershell '''
+              $ErrorActionPreference = 'Stop'
+              . "$env:WORKSPACE/jenkins/common.ps1"
+              Send-BuildNotification
+            '''
+          }
         }
       }
     }
