@@ -87,6 +87,12 @@ try {
       }
     }
     stage('Build installer') {
+      environment {
+        // CMake downloads do not use the Windows desktop or Git proxy settings.
+        HTTPS_PROXY = 'http://127.0.0.1:7897'
+        HTTP_PROXY = 'http://127.0.0.1:7897'
+        NO_PROXY = 'localhost,127.0.0.1,192.168.220.95,git.can-dao.com,pub.flutter-io.cn,storage.flutter-io.cn'
+      }
       steps {
         dir('source') {
           timeout(time: 60, unit: 'MINUTES') {
