@@ -76,6 +76,7 @@ function Invoke-TappoAndroidBuild {
     $keyProperties = Join-Path $app 'android/key.properties'
     $sdkLock = $null
     $text = $null
+    $keyPropertiesBackup = $null
     try {
         while ($null -eq $sdkLock) {
             try { $sdkLock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }
@@ -105,7 +106,10 @@ function Invoke-TappoAndroidBuild {
             Write-Output 'Internal test certificate: not for Google Play or replacing differently signed installations.'
         }
         if ($env:PROJECT -eq 'tappo') {
-            if (Test-Path $keyProperties) { throw 'Unexpected committed key.properties; refuse to overwrite signing configuration' }
+            if (Test-Path $keyProperties) {
+                $keyPropertiesBackup = "$keyProperties.ci-$([guid]::NewGuid().ToString('N'))"
+                Move-Item -LiteralPath $keyProperties -Destination $keyPropertiesBackup
+            }
             $text = @(
                 'storeFile=' + (ConvertTo-JavaProperty $env:TAPPO_PHONE_KEYSTORE_PATH)
                 'storePassword=' + (ConvertTo-JavaProperty $env:TAPPO_PHONE_STORE_PASSWORD)
@@ -158,6 +162,7 @@ function Invoke-TappoAndroidBuild {
         "Signing certificate SHA256: $expected" | Set-Content 'artifacts/signing-certificate.txt'
     } finally {
         if ($env:PROJECT -eq 'tappo' -and (Test-Path $keyProperties) -and $text) { Remove-Item -LiteralPath $keyProperties -Force }
+        if ($keyPropertiesBackup -and (Test-Path $keyPropertiesBackup)) { Move-Item -LiteralPath $keyPropertiesBackup -Destination $keyProperties }
         if ($sdkLock) { $sdkLock.Dispose() }
     }
 }
