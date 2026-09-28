@@ -63,7 +63,7 @@ try {
             def build = {
               powershell '''
                 $ErrorActionPreference = 'Stop'
-                $env:GRADLE_USER_HOME = "$env:WORKSPACE/source/.gradle-home"
+                $env:GRADLE_USER_HOME = 'C:/Users/Administrator/.gradle'
                 . "$env:WORKSPACE/jenkins/tappo-android.ps1"
                 Invoke-TappoAndroidBuild
               '''

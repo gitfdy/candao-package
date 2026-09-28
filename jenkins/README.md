@@ -128,7 +128,7 @@ DUFS 根据产品使用 Kiosk-Windows 或 Self-Checkout-Windows 目录；地址�
 
 ### 节点及验证
 
-使用源码 `.fvmrc` 指定的 Flutter，优先 `D:\work\candao-package\.jenkins-sdk\flutter-<version>`；已核验同版本时可复用 self-checkout 的 SDK（只读开发项目的 SDK，不读其应用源码）。构建持有相应 SDK 锁。Gradle Home 隔离到本任务源码目录；JDK 为节点现有 21.0.12.1，Android SDK 沿用节点配置。
+使用源码 `.fvmrc` 指定的 Flutter，优先 `D:\work\candao-package\.jenkins-sdk\flutter-<version>`；已核验同版本时可复用 self-checkout 的 SDK（只读开发项目的 SDK，不读其应用源码）。构建持有相应 SDK 锁。Gradle Home 使用节点持久缓存 `C:\Users\Administrator\.gradle`；JDK 为节点现有 21.0.12.1，Android SDK 沿用节点配置。
 
 运行 `jenkins/test-tappo-android.ps1` 验证环境/格式、版本号、签名要求及密码转义；`jenkins/test-options.ps1` 验证参数渲染和 APK/AAB 分发校验。
 
