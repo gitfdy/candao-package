@@ -116,18 +116,20 @@ function Invoke-TappoAndroidBuild {
         }
         Push-Location $app
         try {
-            for ($attempt = 1; $attempt -le 3; $attempt++) {
-                $ErrorActionPreference = 'Continue'
-                & $flutter precache --android
-                $ErrorActionPreference = 'Stop'
-                if ($LASTEXITCODE -eq 0) { break }
-                if ($attempt -lt 3) { Start-Sleep -Seconds 10 }
-            }
-            if ($LASTEXITCODE -ne 0) { throw 'Flutter Android artifact download failed after three attempts' }
             $ErrorActionPreference = 'Continue'
             & $flutter pub get
             $ErrorActionPreference = 'Stop'
             if ($LASTEXITCODE -ne 0) { throw 'flutter pub get failed' }
+            if ($env:PROJECT -eq 'tappo_phone') {
+                $env:PATH = "$sdk/bin;$env:PATH"
+                Push-Location $root
+                try {
+                    $ErrorActionPreference = 'Continue'
+                    & "$sdk/bin/dart.bat" run melos exec --concurrency=1 --depends-on=build_runner -- 'dart run build_runner build'
+                    $ErrorActionPreference = 'Stop'
+                    if ($LASTEXITCODE -ne 0) { throw 'Tappo Phone code generation failed' }
+                } finally { Pop-Location }
+            }
             $ErrorActionPreference = 'Continue'
             & $flutter @buildArgs
             $ErrorActionPreference = 'Stop'

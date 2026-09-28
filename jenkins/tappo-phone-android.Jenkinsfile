@@ -39,7 +39,7 @@ try {
     DUFS_URL = 'http://192.168.225.46:5000/dufs/TAPPO_PHONE'
     DUFS_CREDENTIALS_ID = 'dufs'
     DINGTALK_CREDENTIALS_ID = 'dingtalk-webhook'
-    FLUTTER_STORAGE_BASE_URL = 'https://storage.flutter-io.cn'
+    FLUTTER_STORAGE_BASE_URL = 'https://storage.googleapis.com'
     PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
     PUB_CACHE = 'C:\\Users\\Administrator\\AppData\\Local\\Pub\\Cache'
   }
