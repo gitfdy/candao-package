@@ -89,6 +89,8 @@ try {
     stage('Build installer') {
       environment {
         // CMake downloads do not use the Windows desktop or Git proxy settings.
+        // Plugin-managed cache survives checkout cleanup; the SDK lock serializes access.
+        DARTCV_CACHE_DIR = "${env.JENKINS_HOME}/native-cache/toa-pos"
         HTTPS_PROXY = 'http://127.0.0.1:7897'
         HTTP_PROXY = 'http://127.0.0.1:7897'
         NO_PROXY = 'localhost,127.0.0.1,192.168.220.95,git.can-dao.com,pub.flutter-io.cn,storage.flutter-io.cn'
@@ -96,6 +98,7 @@ try {
       steps {
         dir('source') {
           timeout(time: 60, unit: 'MINUTES') {
+          retry(2) {
           powershell '''
             $ErrorActionPreference = 'Stop'
             if ($env:PROJECT -ne 'queue-screen') {
@@ -135,6 +138,7 @@ try {
             if ($LASTEXITCODE -ne 0) { throw "Installer build failed: $LASTEXITCODE" }
             } finally { if ($sdkLock) { $sdkLock.Dispose() } }
           '''
+          }
           }
         }
       }

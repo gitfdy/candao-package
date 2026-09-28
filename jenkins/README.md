@@ -137,3 +137,5 @@ DUFS 根据产品使用 Kiosk-Windows 或 Self-Checkout-Windows 目录；地址�
 ### TOA Windows Incident 上报
 
 `ENABLE_INCIDENT_UPLOAD` 默认关闭，关闭时无需 Incident 服务地址。Jenkins 只调整临时源码目录中的主打包脚本，显式关闭上报并保留构建身份、更新配置及安装器流程。开启时需在 Jenkins 环境配置中提供 `TOA_INCIDENT_API_BASE_URL`；必须是没有用户信息、查询参数或片段的 HTTPS 地址，且所选源码分支及构建类型支持上报。缺失或无效地址会在执行项目打包脚本前报错。此开关与 DUFS 上传、钉钉通知独立。
+
+TOA Windows 的 OpenCV 下载使用插件原生 `DARTCV_CACHE_DIR`，缓存位于 Jenkins 主目录下的 `native-cache/toa-pos`，不随源码工作区清理。打包阶段失败时最多执行两次，共享原有 60 分钟超时和 SDK 锁；归档、上传、通知不在重试块中。不要在构建运行期间清理该缓存。
