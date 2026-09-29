@@ -1,0 +1,18 @@
+{
+  "host": "127.0.0.1",
+  "port": 3100,
+  "publicOrigin": "http://localhost:3100",
+  "secureCookies": false,
+  "jenkins": {
+    "url": "http://127.0.0.1:8080",
+    "username": "packaging-service",
+    "token": "",
+    "jobs": {}
+  },
+  "gitlab": { "url": "https://git.can-dao.com", "token": "" },
+  "signingKeys": {
+    "tappo": [],
+    "tappo-phone": []
+  },
+  "users": []
+}

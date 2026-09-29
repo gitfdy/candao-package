@@ -1,0 +1,124 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createApp } from '../server/app.js';
+import { openStore } from '../server/store.js';
+import { hashPassword } from '../server/auth.js';
+import { buildParameters, projects } from '../server/projects.js';
+import { remoteClients } from '../server/remotes.js';
+
+const origin = 'http://localhost:3100';
+const config = {
+  publicOrigin: origin, secureCookies: false,
+  jenkins: { url: 'http://jenkins.test', username: 'service', token: 'jenkins-secret', jobs: {} },
+  gitlab: { url: 'https://gitlab.test', token: 'gitlab-secret' },
+  signingKeys: { 'tappo-phone': [{ id: 'phone-key', label: 'Phone' }] },
+  users: [
+    { username: 'admin', role: 'admin', passwordHash: hashPassword('correct-password-123') },
+    { username: 'tester', role: 'builder', passwordHash: hashPassword('correct-password-123') }
+  ]
+};
+async function fixture(t) {
+  const store = openStore(':memory:'); let count = 0, sent;
+  const remotes = {
+    branches: async () => ['qc', 'feature/example'],
+    trigger: async (job, parameters) => { count++; sent = { job, parameters }; return 7; },
+    queue: async () => ({ executable: { number: 12 } }),
+    build: async () => ({ building: false, result: 'SUCCESS', artifacts: [{ fileName: 'installer.exe', relativePath: 'artifacts/installer.exe' }] }),
+    log: async () => ({ text: 'jenkins-secret gitlab-secret finished', next: 44, more: false }),
+    artifact: async () => new Response('artifact-bytes')
+  };
+  const app = await createApp({ config, store, remotes });
+  t.after(async () => { await app.close(); store.close(); });
+  async function login(username = 'admin') {
+    const result = await app.inject({ method: 'POST', url: '/api/login', headers: { origin, 'x-platform-request': '1' }, payload: { username, password: 'correct-password-123' } });
+    assert.equal(result.statusCode, 200);
+    return result.headers['set-cookie'].split(';')[0];
+  }
+  const cookie = await login();
+  const send = (method, url, payload, session = cookie) => app.inject({ method, url, payload, headers: { cookie: session, origin, 'x-platform-request': '1' } });
+  return { app, store, remotes, login, send, count: () => count, sent: () => sent };
+}
+const build = { project: 'toa-pos', branch: 'qc', environment: 'pre-prod', format: 'exe', upload: false, notify: false, requestId: 'request-1234567890' };
+
+test('login, origin checks, roles and server-side project allowlist', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.app.inject('/api/projects')).statusCode, 401);
+  assert.equal((await f.app.inject({ method: 'POST', url: '/api/login', payload: {} })).statusCode, 403);
+  const tester = await f.login('tester');
+  assert.equal((await f.send('PUT', '/api/projects/toa-pos/notes', { branch: 'qc', name: 'Test', description: '' }, tester)).statusCode, 403);
+  assert.equal((await f.send('POST', '/api/builds', { ...build, project: 'arbitrary-job' })).statusCode, 404);
+  assert.equal(f.count(), 0);
+});
+test('notes persist, conflict detection, build parameter mapping and idempotency', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.send('PUT', '/api/projects/toa-pos/notes', { branch: 'qc', name: '验收', description: '范围' })).statusCode, 200);
+  assert.equal((await f.send('PUT', '/api/projects/toa-pos/notes', { branch: 'qc', name: '冲突', description: '' })).statusCode, 409);
+  const branches = (await f.send('GET', '/api/projects/toa-pos/branches')).json();
+  assert.equal(branches[0].name, '验收');
+  const response = await f.send('POST', '/api/builds', build);
+  assert.equal(response.statusCode, 201);
+  const id = response.json().id;
+  assert.equal((await f.send('POST', '/api/builds', build)).json().id, id);
+  assert.equal(f.count(), 1);
+  assert.equal(f.sent().parameters.ENVIRONMENT, 'pre-prod');
+  assert.equal(f.sent().parameters.SEND_DINGTALK, 'false');
+  const detail = (await f.send('GET', `/api/builds/${id}`)).json();
+  assert.equal(detail.status, 'SUCCESS'); assert.equal(detail.number, 12);
+  const log = (await f.send('GET', `/api/builds/${id}/log`)).json();
+  assert.equal(log.text, '**** **** finished');
+  const artifact = await f.send('GET', `/api/builds/${id}/artifacts/0`);
+  assert.equal(artifact.body, 'artifact-bytes');
+  assert.match(artifact.headers['content-disposition'], /attachment/);
+  assert.equal((await f.send('GET', `/api/builds/${id}/artifacts/10`)).statusCode, 404);
+});
+test('uncertain submission is recorded and never automatically retriggered', async t => {
+  const f = await fixture(t); let posts = 0;
+  f.remotes.trigger = async () => { posts++; throw new Error('timeout'); };
+  const response = (await f.send('POST', '/api/builds', build)).json();
+  assert.equal(response.status, 'UNKNOWN');
+  assert.equal((await f.send('POST', '/api/builds', build)).json().id, response.id);
+  assert.equal(posts, 1);
+});
+test('reject missing branch, unsupported format, and wrong Play key', async t => {
+  const f = await fixture(t);
+  assert.equal((await f.send('POST', '/api/builds', { ...build, branch: 'missing' })).statusCode, 400);
+  assert.equal((await f.send('POST', '/api/builds', { ...build, format: 'aab' })).statusCode, 400);
+  const phone = projects.find(p => p.id === 'tappo-phone');
+  assert.throws(() => buildParameters(phone, { branch: 'qc', environment: 'prod', format: 'aab' }), /上传密钥/);
+  const parameters = buildParameters(phone, { branch: 'qc', environment: 'prod', format: 'aab', signingKey: 'phone-key', versionCode: '123' }, config.signingKeys['tappo-phone']);
+  assert.equal(parameters.SIGNING_KEY, 'phone-key');
+  assert.equal(parameters.VERSION_CODE, '123');
+  const hpos = projects.find(p => p.id === 'hpos');
+  assert.equal(buildParameters(hpos, { branch: 'qc', environment: 'pre-prod', format: 'apk' }).BUILD_TYPE, 'pre-prod');
+});
+test('remote clients encode job paths, paginate branches and disable credential redirects', async () => {
+  const calls = [];
+  const remotes = remoteClients(config, async (url, options) => {
+    calls.push({ url, options });
+    if (url.includes('/repository/branches')) return Response.json([{ name: url.endsWith('page=1') ? 'qc' : 'feature/abc' }], { headers: { 'x-next-page': url.endsWith('page=1') ? '2' : '' } });
+    return new Response('', { status: 201, headers: { location: 'http://internal/queue/item/9/' } });
+  });
+  assert.deepEqual(await remotes.branches(projects[0]), ['feature/abc', 'qc']);
+  assert.equal(await remotes.trigger('folder/TOA POS', { BRANCH: 'feature/a' }), 9);
+  assert.match(calls[2].url, /job\/folder\/job\/TOA%20POS/);
+  assert.equal(calls[2].options.redirect, 'manual');
+  assert.equal(calls[2].options.body.get('BRANCH'), 'feature/a');
+});
+
+test('concurrent duplicate requests dispatch once and preserve actor boundary', async t => {
+  const f = await fixture(t);
+  const results = await Promise.all([f.send('POST', '/api/builds', build), f.send('POST', '/api/builds', build)]);
+  assert.equal(results[0].json().id, results[1].json().id);
+  assert.equal(f.count(), 1);
+  const tester = await f.login('tester');
+  assert.equal((await f.send('POST', '/api/builds', build, tester)).statusCode, 409);
+});
+
+test('route guards reject anonymous encoded API paths and logout invalidates sessions', async t => {
+  const f = await fixture(t);
+  for (const url of ['/api/projects', '/api/projects?x=1', '/%61pi/projects', '/api%2fprojects']) {
+    assert.notEqual((await f.app.inject(url)).statusCode, 200);
+  }
+  assert.equal((await f.send('POST', '/api/logout')).statusCode, 200);
+  assert.equal((await f.send('GET', '/api/projects')).statusCode, 401);
+});
