@@ -201,3 +201,13 @@ test('route guards reject anonymous encoded API paths and logout invalidates ses
   assert.equal((await f.send('POST', '/api/logout')).statusCode, 200);
   assert.equal((await f.send('GET', '/api/projects')).statusCode, 401);
 });
+
+test('TOA builds disable Incident even when an old client requests it', () => {
+  const project = projects.find(p => p.id === 'toa-pos');
+  for (const incident of [undefined, false, true]) {
+    const parameters = buildParameters(project, { branch: 'devlop_qc', environment: 'test-prod', format: 'exe', upload: true, notify: true, incident });
+    assert.equal(parameters.ENABLE_INCIDENT_UPLOAD, 'false');
+    assert.equal(parameters.UPLOAD_DUFS, 'true');
+    assert.equal(parameters.SEND_DINGTALK, 'true');
+  }
+});

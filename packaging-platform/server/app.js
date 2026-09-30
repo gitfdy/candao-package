@@ -26,8 +26,8 @@ export async function createApp({ config, store, remotes, staticRoot }) {
   });
   await app.register(cookie);
   authentication(app, config);
-  app.get('/api/projects', async () => catalog.map(({ id, name, environments, formats, products, signing, incident }) => ({
-    id, name, environments, formats, products, signing, incident, signingKeys: config.signingKeys?.[id] || []
+  app.get('/api/projects', async () => catalog.map(({ id, name, environments, formats, products, signing }) => ({
+    id, name, environments, formats, products, signing, signingKeys: config.signingKeys?.[id] || []
   })));
   app.get('/api/projects/:project/branches', async request => {
     const project = projectById(request.params.project);

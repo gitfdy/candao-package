@@ -1,7 +1,7 @@
 // These values mirror the checked-in Jenkinsfiles. Job names may be overridden locally.
 const repository = name => `https://git.can-dao.com/flutter-business/${name}.git`;
 export const projects = [
-  { id: 'toa-pos', name: 'TOA POS · Windows', job: 'TOA-POS-Windows', gitlab: 'flutter-business/toa-pos-flutter', repository: repository('toa-pos-flutter'), environments: ['test-prod', 'pre-prod', 'release', 'debug', 'release-debug'], formats: ['exe'], incident: true },
+  { id: 'toa-pos', name: 'TOA POS · Windows', job: 'TOA-POS-Windows', gitlab: 'flutter-business/toa-pos-flutter', repository: repository('toa-pos-flutter'), environments: ['test-prod', 'pre-prod', 'release', 'debug', 'release-debug'], formats: ['exe'] },
   { id: 'kiosk', name: '自助收银 · Windows', job: 'TOA-KIOSK-WINDOWS', gitlab: 'flutter-business/self-checkout', repository: repository('self-checkout'), environments: ['staging', 'test-prod', 'release', 'debug'], formats: ['exe'], products: ['kiosk', 'self_checkout'] },
   { id: 'hpos', name: '手持 POS · Android', job: 'TOA-HPOS-Android', gitlab: 'flutter-business/flutter-hpos', environments: ['test-prod', 'pre-prod', 'release', 'debug'], formats: ['apk'], environmentParameter: 'BUILD_TYPE' },
   { id: 'tappo', name: 'Tappo · Android', job: 'TAPPO-Android', gitlab: 'flutter-business/tappo', environments: ['qc', 'beta', 'gray', 'release'], formats: ['apk', 'aab'], signing: true },
@@ -14,7 +14,7 @@ export function buildParameters(project, input, signingKeys = []) {
   if (!project.environments.includes(input.environment)) fail('不支持此环境');
   if (!project.formats.includes(input.format)) fail('不支持此包格式');
   if (typeof input.branch !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(input.branch) || input.branch.includes('..') || input.branch.length > 250) fail('无效分支');
-  for (const key of ['upload', 'notify', 'incident']) {
+  for (const key of ['upload', 'notify']) {
     if (input[key] !== undefined && typeof input[key] !== 'boolean') fail('无效开关');
   }
   const parameters = {
@@ -23,7 +23,7 @@ export function buildParameters(project, input, signingKeys = []) {
     UPLOAD_DUFS: String(input.upload === true), SEND_DINGTALK: String(input.notify === true)
   };
   if (project.repository) parameters.REPOSITORY_URL = project.repository;
-  if (project.incident) parameters.ENABLE_INCIDENT_UPLOAD = String(input.incident === true);
+  if (project.id === 'toa-pos') parameters.ENABLE_INCIDENT_UPLOAD = 'false';
   if (project.products) {
     if (!project.products.includes(input.product)) fail('请选择产品');
     parameters.PRODUCT = input.product;

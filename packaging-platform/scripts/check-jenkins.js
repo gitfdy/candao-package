@@ -36,7 +36,7 @@ for (const project of projects) {
     const names = (details.property || []).flatMap(item => (item.parameterDefinitions || []).map(parameter => parameter.name));
     const expected = ['BRANCH', project.environmentParameter || 'ENVIRONMENT', 'UPLOAD_DUFS', 'SEND_DINGTALK'];
     if (project.repository) expected.push('REPOSITORY_URL');
-    if (project.incident) expected.push('ENABLE_INCIDENT_UPLOAD');
+    if (project.id === 'toa-pos') expected.push('ENABLE_INCIDENT_UPLOAD');
     if (project.products) expected.push('PRODUCT');
     if (project.signing) expected.push('PACKAGE_FORMAT', 'SIGNING_KEY', 'VERSION_CODE');
     const missing = expected.filter(name => !names.includes(name));
