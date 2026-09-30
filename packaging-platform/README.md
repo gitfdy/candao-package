@@ -1,4 +1,4 @@
-# 餐道打包平台
+# Mobile Build
 
 独立目录，不修改现有 Jenkinsfile 或开发源码目录。Vue 3 前端、Fastify 服务端、Node.js 内置 SQLite；Node 同时提供页面和 API，不需要单独部署前端服务。
 
@@ -54,6 +54,12 @@ npm run user
 ```
 
 输入用户名、角色 `admin` 或 `builder` 和至少 12 位密码；密码不回显，只保存 scrypt 哈希。每位同事创建自己的账号。新增账号后重启平台。
+
+忘记密码时可重置已有账号，仍只保存新的 scrypt 哈希：
+
+```powershell
+npm run user -- --reset admin
+```
 
 5. 启动：
 

@@ -119,6 +119,12 @@ test('notes persist, conflict detection, build parameter mapping and idempotency
   assert.equal(partial.body, 'arti');
   assert.equal(partial.headers['content-range'], 'bytes 0-3/14');
   assert.equal(partial.headers['content-length'], '4');
+  f.remotes.artifact = async () => new Response('dufs-link', {
+    headers: { 'content-encoding': 'gzip', 'content-length': '29' }
+  });
+  const decoded = await f.send('GET', `/api/builds/${id}/artifacts/0`);
+  assert.equal(decoded.body, 'dufs-link');
+  assert.equal(decoded.headers['content-length'], undefined);
   assert.equal((await f.send('GET', `/api/builds/${id}/artifacts/10`)).statusCode, 404);
 });
 test('uncertain submission is recorded and never automatically retriggered', async t => {
@@ -162,6 +168,20 @@ test('remote clients encode job paths, paginate branches and disable credential 
   assert.match(calls[2].url, /job\/folder\/job\/TOA%20POS/);
   assert.equal(calls[2].options.redirect, 'manual');
   assert.equal(calls[2].options.body.get('BRANCH'), 'feature/a');
+});
+
+test('artifact fetch starts with GET without an extra HEAD request', async () => {
+  const calls = [];
+  const remotes = remoteClients(config, async (url, options) => {
+    calls.push({ url, method: options.method || 'GET' });
+    return new Response('https://dufs.test/installer.apk\n');
+  });
+  const response = await remotes.artifact('folder/TOA POS', 13, 'links/dufs-links.txt');
+  assert.equal(await response.text(), 'https://dufs.test/installer.apk\n');
+  assert.deepEqual(calls, [{
+    url: 'http://jenkins.test/job/folder/job/TOA%20POS/13/artifact/links/dufs-links.txt',
+    method: 'GET'
+  }]);
 });
 
 test('concurrent duplicate requests dispatch once and preserve actor boundary', async t => {

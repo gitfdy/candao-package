@@ -65,11 +65,9 @@ export function remoteClients(config, fetcher = fetch) {
     },
     async artifact(job, number, relativePath, range) {
       const path = `${jobPath(job)}/${number}/artifact/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
-      const info = range ? null : await jenkins(path, { method: 'HEAD' }, 30000);
       const response = await jenkins(path, {
         headers: range ? { Range: range } : {}
       }, 15 * 60000);
-      response.verifiedLength = info?.headers.get('content-length');
       return response;
     }
   };

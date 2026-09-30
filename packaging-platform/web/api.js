@@ -1,9 +1,10 @@
 export async function api(path, options = {}) {
+  const hasBody = options.body !== undefined;
   const response = await fetch('/api' + path, {
     signal: AbortSignal.timeout(45000),
     ...options,
-    headers: { 'Content-Type': 'application/json', 'X-Platform-Request': '1', ...options.headers },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body)
+    headers: { ...(hasBody ? { 'Content-Type': 'application/json' } : {}), 'X-Platform-Request': '1', ...options.headers },
+    body: hasBody ? JSON.stringify(options.body) : undefined
   });
   const data = await response.json();
   if (response.status === 401 && path !== '/login') window.dispatchEvent(new Event('platform-session-expired'));

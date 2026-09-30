@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { api } from './api.js';
+import Select from 'primevue/select';
 import BuildForm from './components/BuildForm.vue';
 import BranchManager from './components/BranchManager.vue';
 import BuildHistory from './components/BuildHistory.vue';
@@ -63,25 +64,31 @@ function changeProject() { selectedBuild.value = null; loadBranches(); }
 
 <template>
   <div class="shell">
-    <header><strong class="brand">餐道 · 打包中心</strong><div v-if="user" class="row"><span>{{ user.username }} · {{ user.role === 'admin' ? '管理员' : user.role === 'guest' ? '无需登录即可打包' : '构建成员' }}</span><button v-if="user.role === 'guest'" @click="user = null; error = ''">管理员登录</button><button v-else @click="logout">退出登录</button></div></header>
+    <header class="site-header"><div class="brand-lockup"><strong class="brand">Mobile Build</strong><small>BUILD &amp; RELEASE CONSOLE</small></div><div v-if="user" class="row header-actions"><span class="user-badge"><span class="status-dot"></span>{{ user.username }} · {{ user.role === 'admin' ? '管理员' : user.role === 'guest' ? '访客' : '构建成员' }}</span><button v-if="user.role === 'guest'" @click="user = null; error = ''">管理员登录</button><button v-else @click="logout">退出登录</button></div></header>
     <main v-if="!user" class="login">
-      <h1>{{ guest ? '管理员登录' : '登录打包中心' }}</h1><p>{{ guest ? '登录后可管理分支需求名称和变更备注。' : '选择需求、打包并获取安装包。' }}</p>
-      <button v-if="guest" @click="resume">返回打包平台</button>
-      <form class="panel" @submit.prevent="login"><label>账号<input v-model="username" required autocomplete="username"></label><label>密码<input v-model="password" type="password" required autocomplete="current-password"></label><button class="primary" :disabled="busy">{{ busy ? '登录中…' : '登录' }}</button></form>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <section class="panel login-card">
+        <button v-if="guest" class="login-back" @click="resume"><span aria-hidden="true">←</span> 返回打包平台</button>
+        <div class="login-intro"><span class="eyebrow">管理员功能</span><h1>{{ guest ? '管理员登录' : '登录 Mobile Build' }}</h1><p>{{ guest ? '登录后可管理分支需求名称和变更备注。' : '登录后选择需求、发起打包并获取安装包。' }}</p></div>
+        <form class="login-form" @submit.prevent="login"><label for="login-username">账号</label><input id="login-username" v-model="username" required autocomplete="username" placeholder="请输入管理员账号"><label for="login-password">密码</label><input id="login-password" v-model="password" type="password" required autocomplete="current-password" placeholder="请输入密码"><button class="primary login-submit" :disabled="busy">{{ busy ? '正在登录…' : '登录管理后台' }}</button></form>
+      </section>
+      <p v-if="error" class="error login-error" role="alert">{{ error }}</p>
     </main>
     <template v-else>
-      <div class="project-bar"><label for="project">当前项目</label><select id="project" v-model="projectId" @change="changeProject"><option v-for="item in projects" :key="item.id" :value="item.id">{{ item.name }}</option></select><span class="muted">三个页面共用当前项目</span></div>
-      <nav aria-label="打包中心功能"><button v-for="(label, key) in labels" :key="key" :aria-pressed="page === key" @click="page = key; selectedBuild = null">{{ label }}</button></nav>
-      <main>
-        <p class="breadcrumb">打包中心 / {{ labels[page] }}</p>
+      <div class="workspace">
+        <aside class="sidebar" aria-label="工作区导航">
+          <div class="project-bar"><div><span class="eyebrow">当前工作区</span><label for="project">选择项目</label></div><Select v-model="projectId" inputId="project" :options="projects" optionLabel="name" optionValue="id" class="full-width" @change="changeProject" /><span class="project-meta"><span class="status-dot"></span>{{ branches.length }} 个可用分支</span></div>
+          <nav aria-label="Mobile Build 功能导航"><button v-for="(label, key) in labels" :key="key" :aria-pressed="page === key" @click="page = key; selectedBuild = null">{{ label }}</button></nav>
+        </aside>
+        <main class="workspace-main">
+        <p class="breadcrumb">工作台 <span>/</span> {{ project?.name }} <span>/</span> {{ labels[page] }}</p>
         <div v-if="error" role="alert" class="error">{{ error }} <button @click="loadBranches">重新读取分支</button></div>
-        <template v-if="project">
-          <BuildForm v-if="page === 'build'" :key="project.id" :project="project" :branches="branches" :loading="loading" @submitted="submitted" />
-          <BranchManager v-else-if="page === 'branches'" :key="project.id" :project="project" :branches="branches" :loading="loading" :can-edit="user.role === 'admin'" @refresh="loadBranches" />
-          <BuildHistory v-else :key="project.id" :project="project" :selected-id="selectedBuild" />
-        </template>
-      </main>
+        <Transition name="view" mode="out-in"><div v-if="project" :key="`${project.id}-${page}`" class="page-content">
+          <BuildForm v-if="page === 'build'" :project="project" :branches="branches" :loading="loading" @submitted="submitted" />
+          <BranchManager v-else-if="page === 'branches'" :project="project" :branches="branches" :loading="loading" :can-edit="user.role === 'admin'" @refresh="loadBranches" />
+          <BuildHistory v-else :project="project" :selected-id="selectedBuild" />
+        </div></Transition>
+        </main>
+      </div>
     </template>
   </div>
 </template>

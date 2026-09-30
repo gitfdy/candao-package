@@ -140,7 +140,11 @@ export async function createApp({ config, store, remotes, staticRoot }) {
     reply.code(response.status);
     reply.header('Content-Type', 'application/octet-stream');
     reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(artifact.fileName)}`);
+    // Node fetch transparently decompresses Jenkins responses. Its original
+    // Content-Length then describes compressed bytes, not the streamed body.
+    const decoded = response.headers.get('content-encoding') && response.headers.get('content-encoding') !== 'identity';
     for (const header of ['content-length', 'content-range', 'accept-ranges']) {
+      if (decoded && header === 'content-length') continue;
       const value = response.headers.get(header) || (header === 'content-length' ? response.verifiedLength : null);
       if (value) reply.header(header, value);
     }
