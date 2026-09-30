@@ -85,6 +85,9 @@ try {
     stage('Build APK') {
       environment {
         // CMake/libcurl does not inherit the Windows desktop proxy settings.
+        // Keep the ~100 MB OpenCV SDK outside the disposable workspace so
+        // debug/release builds do not download it again for every checkout.
+        DARTCV_CACHE_DIR = "${env.JENKINS_HOME}/native-cache/hpos-dartcv"
         HTTPS_PROXY = 'http://127.0.0.1:7897'
         HTTP_PROXY = 'http://127.0.0.1:7897'
         NO_PROXY = 'localhost,127.0.0.1,192.168.220.95,git.can-dao.com,pub.flutter-io.cn,storage.flutter-io.cn'
@@ -107,8 +110,16 @@ try {
               'release' { $args += '--release' }
               default { throw "Unsupported build type: $env:BUILD_TYPE" }
             }
-            & $flutter @args
-            if ($LASTEXITCODE -ne 0) { throw 'Flutter APK build failed' }
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              & $flutter @args
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -lt 3) {
+                Write-Warning "Flutter APK build attempt $attempt failed; cleaning generated native state before retry."
+                Remove-Item -LiteralPath 'build' -Recurse -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds (10 * $attempt)
+              }
+            }
+            if ($LASTEXITCODE -ne 0) { throw 'Flutter APK build failed after three attempts' }
           '''
           }
         }
