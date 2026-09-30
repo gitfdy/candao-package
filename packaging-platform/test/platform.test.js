@@ -24,6 +24,7 @@ async function fixture(t, overrides = {}) {
     trigger: async (job, parameters) => { count++; sent = { job, parameters }; return 7; },
     queue: async () => ({ executable: { number: 12 } }),
     build: async () => ({ building: false, result: 'SUCCESS', artifacts: [{ fileName: 'installer.exe', relativePath: 'artifacts/installer.exe' }] }),
+    jenkinsActivity: async () => ({ queue: [], capacity: 2, running: 0 }),
     log: async () => ({ text: 'jenkins-secret gitlab-secret finished', next: 44, more: false }),
     artifact: async () => new Response('artifact-bytes')
   };
@@ -105,6 +106,7 @@ test('notes persist, conflict detection, build parameter mapping and idempotency
   assert.equal(f.sent().parameters.SEND_DINGTALK, 'false');
   const detail = (await f.send('GET', `/api/builds/${id}`)).json();
   assert.equal(detail.status, 'SUCCESS'); assert.equal(detail.number, 12);
+  assert.equal(detail.publicOrigin, origin);
   const log = (await f.send('GET', `/api/builds/${id}/log`)).json();
   assert.equal(log.text, '**** **** finished');
   const artifact = await f.send('GET', `/api/builds/${id}/artifacts/0`);
@@ -191,6 +193,57 @@ test('concurrent duplicate requests dispatch once and preserve actor boundary', 
   assert.equal(f.count(), 1);
   const tester = await f.login('tester');
   assert.equal((await f.send('POST', '/api/builds', build, tester)).statusCode, 409);
+});
+
+test('Jenkins activity reads queued Pipeline steps and occupied executors', async () => {
+  const calls = [];
+  const remotes = remoteClients(config, async url => {
+    calls.push(url);
+    if (url.includes('/queue/api/json')) return Response.json({ items: [
+      { id: 175, task: { name: 'part of TOA-KIOSK-WINDOWS #21', url: 'job/TOA-KIOSK-WINDOWS/21/' } }
+    ] });
+    return Response.json({ computer: [
+      { numExecutors: 2, offline: false, executors: [{ currentExecutable: { url: 'job/A/1/' } }, { currentExecutable: { url: 'job/B/2/' } }] },
+      { numExecutors: 1, offline: true, executors: [] }
+    ] });
+  });
+  const [first, second] = await Promise.all([remotes.jenkinsActivity(), remotes.jenkinsActivity()]);
+  assert.equal(first, second);
+  assert.equal(first.capacity, 2);
+  assert.equal(first.running, 2);
+  assert.equal(first.queue[0].task.url, 'job/TOA-KIOSK-WINDOWS/21/');
+  assert.equal(calls.length, 2);
+});
+
+test('queue status combines active builds across projects without exposing request payloads', async t => {
+  const f = await fixture(t, { allowGuestBuilds: true });
+  const queued = (await f.send('POST', '/api/builds', build)).json();
+  f.store.db.prepare('INSERT INTO builds(request_id,project,actor,created,payload,job,status,number) VALUES(?,?,?,?,?,?,?,?)').run(
+    'other-queue-request', 'hpos', 'tester', new Date().toISOString(),
+    JSON.stringify({ name: '手持需求', branch: 'qc' }), 'TOA-HPOS-Android', 'RUNNING', 21
+  );
+  f.remotes.jenkinsActivity = async () => ({
+    capacity: 2, running: 2,
+    queue: [
+      { id: 175, task: { name: 'part of TOA-HPOS-Android #21', url: 'job/TOA-HPOS-Android/21/' } },
+      { id: 176, task: { name: 'private Jenkins job', url: 'job/PRIVATE/1/' } }
+    ]
+  });
+  const response = await f.app.inject('/api/builds/queue-status');
+  assert.equal(response.statusCode, 200);
+  const queue = response.json();
+  assert.equal(queue.capacity, 2);
+  assert.equal(queue.running, 2);
+  assert.equal(queue.waiting, 2);
+  assert.deepEqual(queue.items.map(item => item.status), ['QUEUED', 'QUEUED', 'QUEUED']);
+  assert.equal(queue.items[0].id, queued.id);
+  assert.equal(queue.items[1].name, '手持需求');
+  assert.equal(queue.items[1].waitingForExecutor, true);
+  assert.equal('payload' in queue.items[1], false);
+  assert.equal(queue.items[2].name, '其他 Jenkins 等待任务');
+  const hpos = (await f.send('GET', '/api/builds?project=hpos')).json();
+  assert.equal(hpos[0].status, 'QUEUED');
+  assert.equal(hpos[0].waitingForExecutor, true);
 });
 
 test('route guards reject anonymous encoded API paths and logout invalidates sessions', async t => {

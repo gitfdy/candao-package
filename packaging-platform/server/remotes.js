@@ -5,6 +5,7 @@ export function remoteClients(config, fetcher = fetch) {
   const gitlabBase = config.gitlab.url.replace(/\/$/, '');
   const authorization = 'Basic ' + Buffer.from(`${config.jenkins.username}:${config.jenkins.token}`).toString('base64');
   const jobPath = job => '/job/' + job.split('/').map(encodeURIComponent).join('/job/');
+  let activityCache, activityExpires = 0, activityPromise;
   async function jenkins(path, options = {}, timeout = 30000) {
     const response = await fetcher(jenkinsBase + path, {
       ...options, redirect: 'manual', signal: AbortSignal.timeout(timeout),
@@ -48,6 +49,27 @@ export function remoteClients(config, fetcher = fetch) {
       return Number(match[1]);
     },
     async queue(id) { return (await jenkins(`/queue/item/${id}/api/json`)).json(); },
+    async jenkinsActivity() {
+      if (activityCache && Date.now() < activityExpires) return activityCache;
+      if (activityPromise) return activityPromise;
+      activityPromise = (async () => {
+        const [queueResponse, computersResponse] = await Promise.all([
+          jenkins('/queue/api/json?tree=items[id,why,task[name,url]]', {}, 10000),
+          jenkins('/computer/api/json?tree=computer[numExecutors,offline,executors[currentExecutable[url]]]', {}, 10000)
+        ]);
+        const [queue, computers] = await Promise.all([queueResponse.json(), computersResponse.json()]);
+        const online = (computers.computer || []).filter(computer => !computer.offline);
+        activityCache = {
+          queue: queue.items || [],
+          capacity: online.reduce((total, computer) => total + (computer.numExecutors || 0), 0),
+          running: online.reduce((total, computer) => total + (computer.executors || []).filter(executor => executor.currentExecutable).length, 0)
+        };
+        activityExpires = Date.now() + 3000;
+        return activityCache;
+      })();
+      try { return await activityPromise; }
+      finally { activityPromise = null; }
+    },
     async build(job, number) {
       return (await jenkins(`${jobPath(job)}/${number}/api/json?tree=number,building,result,duration,timestamp,artifacts[fileName,relativePath]`)).json();
     },

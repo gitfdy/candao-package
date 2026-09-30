@@ -6,6 +6,7 @@ import MemoBook from './components/MemoBook.vue';
 import BuildForm from './components/BuildForm.vue';
 import BranchManager from './components/BranchManager.vue';
 import BuildHistory from './components/BuildHistory.vue';
+import QueueStatus from './components/QueueStatus.vue';
 
 const user = ref(null), username = ref(''), password = ref('');
 const guest = ref(null);
@@ -13,6 +14,7 @@ const projects = ref([]), projectId = ref(''), branches = ref([]);
 const page = ref('build'), error = ref(''), busy = ref(false), loading = ref(false), selectedBuild = ref(null);
 const project = computed(() => projects.value.find(item => item.id === projectId.value));
 const memoBook = ref(null);
+const queueStatus = ref(null);
 function changePage(key) {
   if (memoBook.value && !memoBook.value.canLeave()) return;
   page.value = key; selectedBuild.value = null;
@@ -63,6 +65,7 @@ onMounted(async () => {
 });
 onUnmounted(() => window.removeEventListener('platform-session-expired', sessionExpired));
 function submitted(build) {
+  queueStatus.value?.refresh();
   if (build.project !== projectId.value) return;
   selectedBuild.value = build.id; page.value = 'history';
 }
@@ -71,7 +74,7 @@ function changeProject() { selectedBuild.value = null; loadBranches(); }
 
 <template>
   <div class="shell">
-    <header class="site-header"><div class="brand-lockup"><strong class="brand">Mobile Build</strong><small>BUILD &amp; RELEASE CONSOLE</small></div><div v-if="user" class="row header-actions"><span class="user-badge"><span class="status-dot"></span>{{ user.username }} · {{ user.role === 'admin' ? '管理员' : user.role === 'guest' ? '访客' : '构建成员' }}</span><button v-if="user.role === 'guest'" @click="user = null; error = ''">管理员登录</button><button v-else @click="logout">退出登录</button></div></header>
+    <header class="site-header"><div class="brand-lockup"><strong class="brand">Mobile Build</strong><small>BUILD &amp; RELEASE CONSOLE</small></div><QueueStatus v-if="user" ref="queueStatus" /><div v-if="user" class="row header-actions"><span class="user-badge"><span class="status-dot"></span>{{ user.role === 'guest' ? '访客' : `${user.username} · ${user.role === 'admin' ? '管理员' : '构建成员'}` }}</span><button v-if="user.role === 'guest'" @click="user = null; error = ''">管理员登录</button><button v-else @click="logout">退出登录</button></div></header>
     <main v-if="!user" class="login">
       <section class="panel login-card">
         <button v-if="guest" class="login-back" @click="resume"><span aria-hidden="true">←</span> 返回打包平台</button>

@@ -12,11 +12,12 @@ const branchOptions = computed(() => [...props.branches]
   .sort((a, b) => Number(Boolean(b.name)) - Number(Boolean(a.name)) || a.branch.localeCompare(b.branch))
   .map(item => ({ ...item, displayLabel: item.name && item.name !== item.branch ? `${item.name} · ${item.branch}` : item.branch })));
 const canReview = computed(() => !props.loading && !!branch.value);
+const currentStep = computed(() => busy.value ? 3 : confirmation.value ? 2 : 1);
 watch(() => props.branches, branches => {
   if (!branches.some(item => item.branch === form.branch)) form.branch = branches.find(item => item.branch === 'devlop_qc')?.branch || branches[0]?.branch || '';
 }, { immediate: true });
 function review() {
-  if (!canReview.value) return;
+  if (!canReview.value || confirmation.value || busy.value) return;
   error.value = '';
   // Retain the same request ID when retrying an uncertain HTTP response.
   const requestId = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
@@ -30,12 +31,11 @@ async function submit() {
 }
 </script>
 <template>
+  <div class="page-heading"><div><span class="eyebrow">{{ confirmation ? '第二步 · 最终核对' : '第一步 · 配置任务' }}</span><h1>{{ confirmation ? '确认打包' : '发起打包' }}</h1><p>{{ confirmation ? '请检查分支、环境和分发选项。提交后会立即触发 Jenkins。' : '选择需求分支和目标环境，确认后即可开始构建。' }}</p></div><div class="step-indicator" role="navigation" aria-label="打包步骤"><button type="button" :class="{ active: currentStep === 1, completed: currentStep > 1 }" :aria-current="currentStep === 1 ? 'step' : undefined" :disabled="busy" @click="confirmation = null">1 配置</button><button type="button" :class="{ active: currentStep === 2, completed: currentStep > 2 }" :aria-current="currentStep === 2 ? 'step' : undefined" :disabled="busy || !canReview" @click="review">2 确认</button><button type="button" :class="{ active: currentStep === 3 }" :aria-current="currentStep === 3 ? 'step' : undefined" disabled>3 构建</button></div></div>
   <template v-if="confirmation">
-    <div class="page-heading"><div><span class="eyebrow">第二步 · 最终核对</span><h1>确认打包</h1><p>请检查分支、环境和分发选项。提交后会立即触发 Jenkins。</p></div><button :disabled="busy" @click="confirmation = null">返回修改</button></div>
-    <div class="panel review-panel"><div class="review-banner"><span class="review-icon">✓</span><div><strong>即将创建真实构建</strong><p>本次打包不会自动上传或通知，除非你在上一步明确开启。</p></div></div><dl class="review-grid"><div><dt>项目</dt><dd>{{ project.name }}</dd></div><div><dt>需求 / 分支</dt><dd>{{ confirmation.name }}<span class="code-line">{{ confirmation.branch }}</span></dd></div><div><dt>环境 / 格式</dt><dd>{{ confirmation.environment }} · {{ confirmation.format.toUpperCase() }}</dd></div><div v-if="project.products"><dt>产品</dt><dd>{{ confirmation.product }}</dd></div><div v-if="project.signing"><dt>签名 / 版本号</dt><dd>{{ confirmation.signingKey || '内部测试签名' }} · {{ confirmation.versionCode || '沿用源码' }}</dd></div><div><dt>分发</dt><dd>{{ confirmation.upload ? '上传 DUFS' : '不上传' }} · {{ confirmation.notify ? '发送钉钉通知' : '不通知' }}</dd></div></dl><div class="footer"><span class="muted">提交后可在“构建记录”查看进度与产物。</span><button class="primary" :disabled="busy" @click="submit">{{ busy ? '正在提交，请勿重复操作…' : '确认提交打包 →' }}</button></div></div>
+    <div class="panel review-panel"><div class="review-banner"><span class="review-icon">✓</span><div><strong>即将创建真实构建</strong><p>本次打包不会自动上传或通知，除非你在上一步明确开启。</p></div></div><dl class="review-grid"><div><dt>项目</dt><dd>{{ project.name }}</dd></div><div><dt>需求 / 分支</dt><dd>{{ confirmation.name }}<span class="code-line">{{ confirmation.branch }}</span></dd></div><div><dt>环境 / 格式</dt><dd>{{ confirmation.environment }} · {{ confirmation.format.toUpperCase() }}</dd></div><div v-if="project.products"><dt>产品</dt><dd>{{ confirmation.product }}</dd></div><div v-if="project.signing"><dt>签名 / 版本号</dt><dd>{{ confirmation.signingKey || '内部测试签名' }} · {{ confirmation.versionCode || '沿用源码' }}</dd></div><div><dt>分发</dt><dd>{{ confirmation.upload ? '上传 DUFS' : '不上传' }} · {{ confirmation.notify ? '发送钉钉通知' : '不通知' }}</dd></div></dl><div class="footer"><span class="muted">提交后可在“构建记录”查看进度与产物。</span><button class="primary" :disabled="busy" @click="submit">{{ busy ? '正在提交，请勿重复操作…' : '确认提交打包' }}</button></div></div>
   </template>
   <template v-else>
-    <div class="page-heading"><div><span class="eyebrow">第一步 · 配置任务</span><h1>发起打包</h1><p>选择需求分支和目标环境，确认后即可开始构建。</p></div><div class="step-indicator"><span class="active">1 配置</span><span>2 确认</span><span>3 构建</span></div></div>
     <form class="build-layout" @submit.prevent="review">
       <div class="panel build-fields">
       <div class="section-heading"><span class="section-number">01</span><div><h2>选择需求</h2><p>打开下拉框可浏览全部分支，也可以输入名称或分支名筛选。</p></div></div><label class="field-label" for="branch-select">需求 / 分支</label><Select v-model="form.branch" inputId="branch-select" :options="branchOptions" optionLabel="displayLabel" optionValue="branch" filter :filterFields="['name', 'branch', 'description']" :loading="loading" :disabled="loading || !branches.length" placeholder="选择一个需求分支" class="full-width"><template #option="slotProps"><span class="branch-choice"><strong>{{ slotProps.option.name || slotProps.option.branch }}</strong><code>{{ slotProps.option.branch }}</code><small v-if="slotProps.option.description">{{ slotProps.option.description }}</small></span></template></Select><p class="field-hint">共 {{ branches.length }} 个可用分支，列表可滚动浏览。</p>

@@ -106,7 +106,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 <style scoped>
 .memo-list { display: grid; gap: 16px; }
 .memo-editor { display: grid; gap: 12px; }
-.memo-content { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; background: #f3f7f5; padding: 16px; border-radius: 8px; }
+.memo-content { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 360px; overflow: auto; background: #f3f7f5; color: #243a34; padding: 16px; border-radius: 8px; }
 textarea, .memo-content { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }
 h2 { overflow-wrap: anywhere; }
 </style>

@@ -90,7 +90,61 @@ export async function createApp({ config, store, remotes, staticRoot }) {
   });
   app.get('/api/builds', async request => {
     projectById(request.query.project);
-    return db.prepare('SELECT * FROM builds WHERE project=? ORDER BY id DESC LIMIT 100').all(request.query.project);
+    const rows = db.prepare('SELECT * FROM builds WHERE project=? ORDER BY id DESC LIMIT 100').all(request.query.project);
+    const activity = await remotes.jenkinsActivity?.().catch(() => null);
+    return rows.map(row => presentBuild(row, activity));
+  });
+  function queueItemMatchesBuild(item, row) {
+    if (row.queue_id && Number(item.id) === row.queue_id) return true;
+    if (!row.number || !item.task?.url) return false;
+    try {
+      const base = config.jenkins.url.replace(/\/$/, '') + '/';
+      const job = row.job.split('/').map(encodeURIComponent).join('/job/');
+      const buildPath = new URL(`job/${job}/${row.number}/`, base).pathname.replace(/\/$/, '');
+      const taskPath = new URL(item.task.url, base).pathname.replace(/\/$/, '');
+      return buildPath === taskPath;
+    } catch { return false; }
+  }
+  function presentBuild(row, activity) {
+    if (!activity || !['QUEUED', 'RUNNING'].includes(row.status)) return row;
+    const waiting = activity.queue.some(item => queueItemMatchesBuild(item, row));
+    const waitingForExecutor = Boolean(waiting && row.number);
+    return {
+      ...row,
+      status: waiting ? 'QUEUED' : row.number ? 'RUNNING' : row.status,
+      waitingForExecutor
+    };
+  }
+  app.get('/api/builds/queue-status', async () => {
+    const activity = await remotes.jenkinsActivity();
+    const active = db.prepare("SELECT id,project,actor,created,payload,status,queue_id,number,job FROM builds WHERE status IN ('SUBMITTING','QUEUED','RUNNING') ORDER BY created,id").all();
+    const matched = new Set(activity.queue.filter(item => active.some(row => queueItemMatchesBuild(item, row))).map(item => item.id));
+    return {
+      capacity: activity.capacity,
+      running: activity.running,
+      waiting: activity.queue.length,
+      items: [...active.map(row => {
+        const payload = JSON.parse(row.payload);
+        const shown = presentBuild(row, activity);
+        return {
+          id: row.id,
+          project: catalog.find(project => project.id === row.project)?.name || row.project,
+          actor: row.actor,
+          created: row.created,
+          name: payload.name || payload.branch,
+          status: shown.status,
+          waitingForExecutor: shown.waitingForExecutor || false
+        };
+      }), ...activity.queue.filter(item => !matched.has(item.id)).map(item => ({
+        id: `jenkins-${item.id}`,
+        source: 'jenkins',
+        project: 'Jenkins',
+        actor: '',
+        name: '其他 Jenkins 等待任务',
+        status: 'QUEUED',
+        waitingForExecutor: true
+      }))].sort((a, b) => (a.status === 'RUNNING' ? 0 : 1) - (b.status === 'RUNNING' ? 0 : 1))
+    };
   });
   async function refresh(row) {
     if (!['QUEUED', 'RUNNING'].includes(row.status)) return row;
@@ -112,12 +166,14 @@ export async function createApp({ config, store, remotes, staticRoot }) {
   }
   app.get('/api/builds/:id', async request => {
     const row = await refresh(buildById(request.params.id));
+    const activity = await remotes.jenkinsActivity?.().catch(() => null);
+    const shown = presentBuild(row, activity);
     let artifacts = [];
     if (row.number) {
       try { artifacts = (await remotes.build(row.job, row.number)).artifacts || []; }
-      catch { return { ...row, artifacts, error: row.error || '产物信息暂时无法读取' }; }
+      catch { return { ...shown, artifacts, publicOrigin: config.publicOrigin, error: row.error || '产物信息暂时无法读取' }; }
     }
-    return { ...row, artifacts };
+    return { ...shown, artifacts, publicOrigin: config.publicOrigin };
   });
   app.get('/api/builds/:id/log', async request => {
     const row = buildById(request.params.id);
