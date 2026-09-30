@@ -10,7 +10,14 @@ export function remoteClients(config, fetcher = fetch) {
       ...options, redirect: 'manual', signal: AbortSignal.timeout(timeout),
       headers: { Authorization: authorization, ...options.headers }
     });
-    if (!response.ok) fail(`Jenkins 请求失败（HTTP ${response.status}）`, 502);
+    if (!response.ok) {
+      const rejected = [400, 401, 403, 404, 405, 422].includes(response.status);
+      const body = response.status === 403 ? await response.text() : '';
+      const message = /No valid crumb|invalid crumb/i.test(body)
+        ? 'Jenkins 拒绝提交：CSRF 校验失败，请使用 API Token 而非登录密码。'
+        : `Jenkins 请求失败（HTTP ${response.status}），请检查任务名称及服务账号权限。`;
+      throw Object.assign(new Error(message), { statusCode: 502, submissionRejected: rejected });
+    }
     return response;
   }
   return {
@@ -56,8 +63,14 @@ export function remoteClients(config, fetcher = fetch) {
       const text = Buffer.concat(chunks).toString('utf8');
       return { text, next: start + size, more: response.headers.get('x-more-data') === 'true' || size >= 256000 };
     },
-    async artifact(job, number, relativePath) {
-      return jenkins(`${jobPath(job)}/${number}/artifact/${relativePath.split('/').map(encodeURIComponent).join('/')}`, {}, 15 * 60000);
+    async artifact(job, number, relativePath, range) {
+      const path = `${jobPath(job)}/${number}/artifact/${relativePath.split('/').map(encodeURIComponent).join('/')}`;
+      const info = range ? null : await jenkins(path, { method: 'HEAD' }, 30000);
+      const response = await jenkins(path, {
+        headers: range ? { Range: range } : {}
+      }, 15 * 60000);
+      response.verifiedLength = info?.headers.get('content-length');
+      return response;
     }
   };
 }

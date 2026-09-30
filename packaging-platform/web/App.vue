@@ -1,16 +1,23 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { api } from './api.js';
 import BuildForm from './components/BuildForm.vue';
 import BranchManager from './components/BranchManager.vue';
 import BuildHistory from './components/BuildHistory.vue';
 
 const user = ref(null), username = ref(''), password = ref('');
+const guest = ref(null);
 const projects = ref([]), projectId = ref(''), branches = ref([]);
 const page = ref('build'), error = ref(''), busy = ref(false), loading = ref(false), selectedBuild = ref(null);
 const project = computed(() => projects.value.find(item => item.id === projectId.value));
 const labels = { build: '发起打包', branches: '分支信息管理', history: '构建记录' };
 let branchRequest = 0;
+function sessionExpired() {
+  const wasLoggedIn = Boolean(user.value);
+  user.value = null; projects.value = []; projectId.value = ''; branches.value = [];
+  selectedBuild.value = null; page.value = 'build'; loading.value = false; branchRequest++;
+  if (wasLoggedIn) error.value = '登录已失效，请重新登录。';
+}
 async function loadBranches() {
   const request = ++branchRequest;
   branches.value = []; loading.value = true; error.value = '';
@@ -34,13 +41,19 @@ async function login() {
   finally { busy.value = false; }
 }
 async function logout() {
-  try { await api('/logout', { method: 'POST' }); user.value = null; branches.value = []; }
+  try { await api('/logout', { method: 'POST' }); await resume(); }
   catch (issue) { error.value = issue.message; }
 }
-onMounted(async () => {
-  try { user.value = await api('/me'); await initialize(); }
+async function resume() {
+  user.value = null; branches.value = []; selectedBuild.value = null; page.value = 'build'; error.value = '';
+  try { user.value = await api('/me'); if (user.value.role === 'guest') guest.value = user.value; await initialize(); }
   catch (issue) { if (issue.status !== 401) error.value = issue.message; }
+}
+onMounted(async () => {
+  window.addEventListener('platform-session-expired', sessionExpired);
+  await resume();
 });
+onUnmounted(() => window.removeEventListener('platform-session-expired', sessionExpired));
 function submitted(build) {
   if (build.project !== projectId.value) return;
   selectedBuild.value = build.id; page.value = 'history';
@@ -50,9 +63,10 @@ function changeProject() { selectedBuild.value = null; loadBranches(); }
 
 <template>
   <div class="shell">
-    <header><strong class="brand">餐道 · 打包中心</strong><div v-if="user" class="row"><span>{{ user.username }} · {{ user.role === 'admin' ? '管理员' : '构建成员' }}</span><button @click="logout">退出登录</button></div></header>
+    <header><strong class="brand">餐道 · 打包中心</strong><div v-if="user" class="row"><span>{{ user.username }} · {{ user.role === 'admin' ? '管理员' : user.role === 'guest' ? '无需登录即可打包' : '构建成员' }}</span><button v-if="user.role === 'guest'" @click="user = null; error = ''">管理员登录</button><button v-else @click="logout">退出登录</button></div></header>
     <main v-if="!user" class="login">
-      <h1>登录打包中心</h1><p>选择需求、打包并获取安装包。</p>
+      <h1>{{ guest ? '管理员登录' : '登录打包中心' }}</h1><p>{{ guest ? '登录后可管理分支需求名称和变更备注。' : '选择需求、打包并获取安装包。' }}</p>
+      <button v-if="guest" @click="resume">返回打包平台</button>
       <form class="panel" @submit.prevent="login"><label>账号<input v-model="username" required autocomplete="username"></label><label>密码<input v-model="password" type="password" required autocomplete="current-password"></label><button class="primary" :disabled="busy">{{ busy ? '登录中…' : '登录' }}</button></form>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
     </main>

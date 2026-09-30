@@ -12,6 +12,11 @@ if (new Set(config.users.map(user => user.username)).size !== config.users.lengt
 const origin = new URL(config.publicOrigin);
 if (origin.origin !== config.publicOrigin) throw new Error('publicOrigin 必须为访问页面的协议和域名，不包含路径或末尾斜线');
 if (origin.protocol === 'https:' && !config.secureCookies) throw new Error('HTTPS 入口必须开启 secureCookies');
+if (config.allowedOrigins !== undefined && !Array.isArray(config.allowedOrigins)) throw new Error('allowedOrigins 必须为地址数组');
+for (const address of config.allowedOrigins || []) {
+  const allowed = new URL(address);
+  if (!['http:', 'https:'].includes(allowed.protocol) || allowed.origin !== address) throw new Error('allowedOrigins 必须是完整来源地址，不包含路径或末尾斜线');
+}
 if (!config.jenkins.token || !config.gitlab.token) throw new Error('请配置 Jenkins API Token 和 GitLab Token');
 for (const endpoint of [config.jenkins.url, config.gitlab.url]) {
   const url = new URL(endpoint);

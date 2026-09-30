@@ -17,7 +17,7 @@ const config = {
     { username: 'tester', role: 'builder', passwordHash: hashPassword('correct-password-123') }
   ]
 };
-async function fixture(t) {
+async function fixture(t, overrides = {}) {
   const store = openStore(':memory:'); let count = 0, sent;
   const remotes = {
     branches: async () => ['qc', 'feature/example'],
@@ -27,7 +27,7 @@ async function fixture(t) {
     log: async () => ({ text: 'jenkins-secret gitlab-secret finished', next: 44, more: false }),
     artifact: async () => new Response('artifact-bytes')
   };
-  const app = await createApp({ config, store, remotes });
+  const app = await createApp({ config: { ...config, ...overrides }, store, remotes });
   t.after(async () => { await app.close(); store.close(); });
   async function login(username = 'admin') {
     const result = await app.inject({ method: 'POST', url: '/api/login', headers: { origin, 'x-platform-request': '1' }, payload: { username, password: 'correct-password-123' } });
@@ -35,10 +35,51 @@ async function fixture(t) {
     return result.headers['set-cookie'].split(';')[0];
   }
   const cookie = await login();
-  const send = (method, url, payload, session = cookie) => app.inject({ method, url, payload, headers: { cookie: session, origin, 'x-platform-request': '1' } });
+  const send = (method, url, payload, session = cookie, extraHeaders = {}) => app.inject({ method, url, payload, headers: { cookie: session, origin, 'x-platform-request': '1', ...extraHeaders } });
   return { app, store, remotes, login, send, count: () => count, sent: () => sent };
 }
 const build = { project: 'toa-pos', branch: 'qc', environment: 'pre-prod', format: 'exe', upload: false, notify: false, requestId: 'request-1234567890' };
+
+test('guest builds allow browsing and submission while notes remain admin-only', async t => {
+  const f = await fixture(t, { allowGuestBuilds: true });
+  assert.equal((await f.app.inject('/api/me')).json().role, 'guest');
+  assert.equal((await f.app.inject('/api/projects')).statusCode, 200);
+  assert.equal((await f.app.inject('/api/projects/toa-pos/branches')).statusCode, 200);
+  assert.equal((await f.send('PUT', '/api/projects/toa-pos/notes', { branch: 'qc', name: 'changed', description: '' }, '')).statusCode, 403);
+  assert.equal((await f.send('PUT', '/api/projects/toa-pos/notes', { branch: 'qc', name: 'changed', description: '' })).statusCode, 200);
+  const result = (await f.send('POST', '/api/builds', build, '')).json();
+  assert.equal(result.status, 'QUEUED');
+  assert.equal(result.actor, '访客');
+  await f.send('POST', '/api/builds', build, '');
+  assert.equal(f.count(), 1);
+  assert.equal((await f.app.inject({ method: 'POST', url: '/api/builds', payload: { ...build, requestId: 'other-request-123456' } })).statusCode, 403);
+  assert.equal((await f.send('GET', `/api/builds/${result.id}`, undefined, '')).statusCode, 200);
+  assert.equal((await f.send('GET', `/api/builds/${result.id}/artifacts/0`, undefined, '')).statusCode, 200);
+  await f.send('POST', '/api/logout');
+  assert.equal((await f.send('PUT', '/api/projects/toa-pos/notes', { branch: 'qc', name: 'changed', description: '' })).statusCode, 403);
+});
+
+test('explicit external origins are accepted while unrelated origins remain blocked', async t => {
+  const f = await fixture(t, { allowGuestBuilds: true, allowedOrigins: ['http://package.sa1.tunnelfrp.com'] });
+  const call = origin => f.app.inject({ method: 'POST', url: '/api/logout', headers: { origin, 'x-platform-request': '1' } });
+  assert.equal((await call('http://package.sa1.tunnelfrp.com')).statusCode, 200);
+  assert.equal((await call('http://other.example')).statusCode, 403);
+  assert.equal((await call('http://package.sa1.tunnelfrp.com.evil.example')).statusCode, 403);
+  assert.equal(f.count(), 0);
+});
+
+test('live branch preview rejects builds before reserving or dispatching', async t => {
+  const store = openStore(':memory:');
+  const app = await createApp({ config: { ...config, previewBranchesOnly: true }, store, remotes: {
+    branches: async () => { throw new Error('must not read branches'); },
+    trigger: async () => { throw new Error('must not trigger Jenkins'); }
+  } });
+  t.after(async () => { await app.close(); store.close(); });
+  const login = await app.inject({ method: 'POST', url: '/api/login', headers: { origin, 'x-platform-request': '1' }, payload: { username: 'admin', password: 'correct-password-123' } });
+  const response = await app.inject({ method: 'POST', url: '/api/builds', headers: { origin, 'x-platform-request': '1', cookie: login.headers['set-cookie'].split(';')[0] }, payload: build });
+  assert.equal(response.statusCode, 403);
+  assert.equal(store.db.prepare('SELECT count(*) AS count FROM builds').get().count, 0);
+});
 
 test('login, origin checks, roles and server-side project allowlist', async t => {
   const f = await fixture(t);
@@ -69,6 +110,15 @@ test('notes persist, conflict detection, build parameter mapping and idempotency
   const artifact = await f.send('GET', `/api/builds/${id}/artifacts/0`);
   assert.equal(artifact.body, 'artifact-bytes');
   assert.match(artifact.headers['content-disposition'], /attachment/);
+  f.remotes.artifact = async (job, number, path, range) => {
+    assert.equal(range, 'bytes=0-3');
+    return new Response('arti', { status: 206, headers: { 'content-length': '4', 'content-range': 'bytes 0-3/14', 'accept-ranges': 'bytes' } });
+  };
+  const partial = await f.send('GET', `/api/builds/${id}/artifacts/0`, undefined, undefined, { range: 'bytes=0-3' });
+  assert.equal(partial.statusCode, 206);
+  assert.equal(partial.body, 'arti');
+  assert.equal(partial.headers['content-range'], 'bytes 0-3/14');
+  assert.equal(partial.headers['content-length'], '4');
   assert.equal((await f.send('GET', `/api/builds/${id}/artifacts/10`)).statusCode, 404);
 });
 test('uncertain submission is recorded and never automatically retriggered', async t => {
@@ -79,6 +129,15 @@ test('uncertain submission is recorded and never automatically retriggered', asy
   assert.equal((await f.send('POST', '/api/builds', build)).json().id, response.id);
   assert.equal(posts, 1);
 });
+test('Jenkins CSRF rejection is recorded distinctly from uncertain submissions', async t => {
+  const f = await fixture(t);
+  f.remotes.trigger = remoteClients(config, async () => new Response('No valid crumb was included in the request', { status: 403 })).trigger;
+  const row = (await f.send('POST', '/api/builds', build)).json();
+  assert.equal(row.status, 'REJECTED');
+  assert.match(row.error, /API Token/);
+  assert.equal(row.queue_id, null);
+});
+
 test('reject missing branch, unsupported format, and wrong Play key', async t => {
   const f = await fixture(t);
   assert.equal((await f.send('POST', '/api/builds', { ...build, branch: 'missing' })).statusCode, 400);

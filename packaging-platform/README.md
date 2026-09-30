@@ -4,13 +4,13 @@
 
 ## 已实现
 
-- 登录：管理员 `admin` 可维护分支说明；`builder` 可打包和查看构建。账号均可访问已配置的所有项目，暂不提供按项目隔离。
+- 默认访客模式（`allowGuestBuilds: true`）：无需登录即可查看分支、打包、查看构建日志和下载安装包；提交人统一记录为“访客”。分支说明和变更备注仅管理员登录后可修改。关闭此选项后，所有 API 需登录，`builder` 可打包和查看构建。所有账号和访客均可访问已配置的所有项目，暂不提供按项目隔离。
 - GitLab 实时分支列表、需求名称及测试说明、编辑冲突检测、操作审计。
 - 项目固定白名单、环境和分支独立选择、按原 Pipeline 映射参数。
 - Tappo / Phone 支持 APK 和 AAB；HPOS 原流水线仅支持 APK，Windows 为 EXE。
 - DUFS、钉钉默认关闭。TOA 支持原有 Incident 开关；Kiosk 支持产品选择；Tappo 支持版本号和已有签名凭据。
 - 确认后触发真实 Jenkins，保存请求快照、提交人、队列和构建编号；重复请求不会重复触发。
-- 平台提交记录、状态、分段日志、经登录校验的安装包下载。暂不导入 Jenkins 原有历史构建。
+- 平台提交记录、状态、分段日志、安装包下载（访客模式公开可访问，关闭后需登录）。暂不导入 Jenkins 原有历史构建。
 
 知识库、应用商店发布、自动创建 Jenkins 任务、线上凭据上传不在首版范围。
 
@@ -30,6 +30,7 @@ Copy-Item config.example.json config.local.json
    - `jenkins.username` / `token`：服务账号及 **API Token**，不是登录密码。需对应任务的 Read、Build、读取产物权限。Token 调用不需要关闭 Jenkins CSRF。
    - `gitlab.url` / `token`：GitLab 根地址及可读取这些仓库分支的 Token（`read_api`）。不能复用只允许 Git 拉代码、无 API 访问权限的 Token。
    - `publicOrigin`：同事实际打开的地址，如 `https://package.example.com`，没有末尾斜线。必须与浏览器 Origin 一致。
+   - `allowedOrigins`：可选的额外受信任访问地址数组，例如 `["http://localhost:3100"]`，只允许确切地址，不支持通配符。
    - `host`：穿透客户端和平台同机时保持 `127.0.0.1`；局域网直连才改 `0.0.0.0`。`port` 默认 3100。
    - HTTPS 入口设 `secureCookies: true`。仅本机调试 HTTP 时保持 false。对外使用 HTTPS 穿透/反向代理，不使用明文 HTTP 传账号和会话。
    - `jenkins.jobs`：部署时核对任务真实名称；默认是 TOA-POS-Windows、TOA-KIOSK-WINDOWS、TOA-HPOS-Android、TAPPO-Android、TAPPO-PHONE-Android。若改名，例如配置 `"hpos": "HPOS-Android-Package"`。支持文件夹路径 `folder/job-name`。
@@ -45,6 +46,8 @@ Copy-Item config.example.json config.local.json
 这里仅保存凭据 ID；JKS 和密码仍在 Jenkins。按现有 Pipeline 同时配置 `<id>-passwords`（别名/库密码）、`<id>-key-password`、`<id>-sha256`。Tappo Phone AAB 强制选择密钥。已有 Pipeline 会验证签名指纹。不要将密码、JKS、Token 放入页面或 Git。
 
 4. 创建平台账号：
+
+填写 Jenkins 配置后，可先执行 `npm run check:jenkins`，验证服务账号认证、任务读取和平台所需参数。检查不会触发构建；Jenkins 服务账号仍需对应任务的 Build 和读取产物权限。
 
 ```powershell
 npm run user
@@ -87,10 +90,15 @@ npm run build
 - `UNKNOWN`：Jenkins 可能已接收请求，禁止盲目重提。由管理员到 Jenkins 核对。
 - 暂时无法同步：保留最后状态，不冒充失败或成功。队列记录已被 Jenkins 清除且平台尚未获取构建编号时，也需要在 Jenkins 核对。
 - 状态每 10 秒后台同步；浏览器每 5 秒读取。通知结果以原流水线规则为准。
-- 日志可能包含业务信息，只有平台账号可访问；Jenkins 必须继续使用其凭据掩码。服务端额外遮盖平台持有的两个 Token，不保证识别任意业务密钥。
+- 日志可能包含业务信息，访客模式下访问平台的人均可查看；关闭访客模式后仅平台账号可访问。Jenkins 必须继续使用其凭据掩码。服务端额外遮盖平台持有的两个 Token，不保证识别任意业务密钥。
 - 会话保留 8 小时，重启后重新登录；同机单实例运行，不支持多进程横向部署。
 - 审计保存在 SQLite `audit` 表；构建请求快照保存在 `builds` 表。请定期备份并按团队保留规则清理，首版不自动删除数据。
 
 ## 本地开发
+
+### 仅接入真实分支数据
+
+在 `config.local.json` 配置 `gitlab.url` 和具有 `read_api` 权限的 `gitlab.token` 后，使用 Node.js 24 运行 `npm run preview:branches`。
+打开 `http://localhost:3101`，账号 `preview`，密码 `local-preview-only`。此模式仅绑定本机，分支来自真实 GitLab，分支说明保存在 `data/branch-preview.sqlite`，重启后保留。Jenkins 操作禁用，不需要 Jenkins Token。此账号仅用于本地预览；正式部署仍应创建个人账号并运行 `npm start`。原 `node test/preview.js` 保持使用模拟数据。
 
 配置同上，服务端运行 `npm start`；另开终端 `npm run dev`。开发时 `publicOrigin` 改成 Vite 实际地址（通常 `http://localhost:5173`）。Vite 将 `/api` 转发到 3100。生产只需 `npm run build` 后运行 Node。

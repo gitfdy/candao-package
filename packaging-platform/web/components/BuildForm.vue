@@ -5,6 +5,7 @@ const props = defineProps(['project', 'branches', 'loading']);
 const emit = defineEmits(['submitted']);
 const form = reactive({ branch: '', environment: props.project.environments[0], format: props.project.formats[0], product: props.project.products?.[0], signingKey: '', versionCode: '', upload: false, notify: false, incident: false });
 const confirmation = ref(null), busy = ref(false), error = ref('');
+const uncertain = ref(false);
 const branch = computed(() => props.branches.find(item => item.branch === form.branch));
 watch(() => props.branches, branches => {
   if (!branches.some(item => item.branch === form.branch)) form.branch = branches.find(item => item.branch === 'devlop_qc')?.branch || branches[0]?.branch || '';
@@ -17,9 +18,9 @@ function review() {
   confirmation.value = { ...form, project: props.project.id, requestId, name: branch.value.name || form.branch };
 }
 async function submit() {
-  busy.value = true; error.value = '';
+  busy.value = true; error.value = ''; uncertain.value = false;
   try { emit('submitted', await api('/builds', { method: 'POST', body: confirmation.value })); }
-  catch (issue) { error.value = issue.message; }
+  catch (issue) { error.value = issue.message; uncertain.value = !issue.status || issue.status >= 500; }
   finally { busy.value = false; }
 }
 </script>
@@ -39,5 +40,5 @@ async function submit() {
       <h2>分发选项</h2><div class="row"><label class="check"><input v-model="form.upload" type="checkbox">上传 DUFS</label><label class="check"><input v-model="form.notify" type="checkbox">钉钉通知</label><label v-if="project.incident" class="check"><input v-model="form.incident" type="checkbox">启用 Incident 故障上报</label></div><div class="footer"><span class="muted">下载地址与分发凭据由 Jenkins 管理。</span><button class="primary" :disabled="loading || !branch">下一步：确认打包</button></div>
     </form>
   </template>
-  <p v-if="error" class="error" role="alert">{{ error }}。提交响应不明时，请先查看构建记录；再次点击确认将复用同一请求编号。</p>
+  <p v-if="error" class="error" role="alert">{{ error }}<template v-if="uncertain">。提交响应不明时，请先查看构建记录；再次点击确认将复用同一请求编号。</template></p>
 </template>

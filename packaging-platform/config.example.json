@@ -3,6 +3,7 @@
   "port": 3100,
   "publicOrigin": "http://localhost:3100",
   "secureCookies": false,
+  "allowGuestBuilds": true,
   "jenkins": {
     "url": "http://127.0.0.1:8080",
     "username": "packaging-service",

@@ -15,6 +15,7 @@ export function authentication(app, config) {
   const attempts = new Map();
   const dummyHash = hashPassword(randomBytes(32).toString('hex'));
   const cookie = { path: '/', httpOnly: true, secure: config.secureCookies, sameSite: 'strict' };
+  const trustedOrigins = new Set([config.publicOrigin, ...(config.allowedOrigins || [])]);
   const cleanup = setInterval(() => {
     const now = Date.now();
     for (const [id, session] of sessions) if (session.expires < now) sessions.delete(id);
@@ -25,11 +26,17 @@ export function authentication(app, config) {
     const route = request.routeOptions.url || '';
     if (!route.startsWith('/api/')) return;
     if (!['GET', 'HEAD'].includes(request.method)) {
-      if (request.headers.origin !== config.publicOrigin || request.headers['x-platform-request'] !== '1') fail('请求来源不受信任', 403);
+      if (!trustedOrigins.has(request.headers.origin) || request.headers['x-platform-request'] !== '1') fail('请求来源不受信任：访问地址须与平台 publicOrigin 或 allowedOrigins 配置一致。本次请求未提交。', 403);
     }
     if (route === '/api/login') return;
     const session = sessions.get(request.cookies.session);
-    if (!session || session.expires < Date.now()) fail('请登录', 401);
+    if (!session || session.expires < Date.now()) {
+      if (config.allowGuestBuilds === true) {
+        request.user = { username: '访客', role: 'guest' };
+        return;
+      }
+      fail('请登录', 401);
+    }
     request.user = session.user;
   });
   app.post('/api/login', async (request, reply) => {

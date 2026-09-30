@@ -10,7 +10,9 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "start": "node server/index.js",
+    "preview:branches": "node test/preview.js --live-branches",
     "user": "node scripts/create-user.js",
+    "check:jenkins": "node scripts/check-jenkins.js",
     "test": "node --test test/*.test.js"
   },
   "dependencies": {

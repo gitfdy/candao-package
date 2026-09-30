@@ -49,6 +49,7 @@ export async function createApp({ config, store, remotes, staticRoot }) {
     return { updated: now };
   });
   app.post('/api/builds', async (request, reply) => {
+    if (config.previewBranchesOnly) fail('真实分支预览暂不支持 Jenkins 构建，请配置正式服务后使用。', 403);
     const input = request.body || {};
     if (!/^[a-zA-Z0-9-]{16,80}$/.test(input.requestId || '')) fail('请求标识无效');
     const previous = db.prepare('SELECT * FROM builds WHERE request_id=?').get(input.requestId);
@@ -76,8 +77,11 @@ export async function createApp({ config, store, remotes, staticRoot }) {
     try {
       const queue = await remotes.trigger(project.job, parameters);
       db.prepare('UPDATE builds SET queue_id=?,status=? WHERE id=?').run(queue, 'QUEUED', id);
-    } catch {
-      db.prepare('UPDATE builds SET status=?,error=? WHERE id=?').run('UNKNOWN', '提交结果未确认。请管理员在 Jenkins 核对，避免重复构建。', id);
+    } catch (error) {
+      db.prepare('UPDATE builds SET status=?,error=? WHERE id=?').run(
+        error.submissionRejected ? 'REJECTED' : 'UNKNOWN',
+        error.submissionRejected ? redact(error.message) : '提交结果未确认。请管理员在 Jenkins 核对，避免重复构建。', id
+      );
     }
     reply.code(201);
     return buildById(id);
@@ -129,9 +133,17 @@ export async function createApp({ config, store, remotes, staticRoot }) {
     const build = await remotes.build(row.job, row.number);
     const artifact = build.artifacts?.[index];
     if (!artifact || artifact.relativePath.split('/').some(part => part === '..') || artifact.relativePath.includes('\\')) fail('产物不存在', 404);
-    const response = await remotes.artifact(row.job, row.number, artifact.relativePath);
+    const range = request.headers.range;
+    if (range && !/^bytes=\d+-\d*$/.test(range)) fail('无效下载范围');
+    const response = await remotes.artifact(row.job, row.number, artifact.relativePath, range);
+    if (response.status !== 200 && response.status !== 206) fail('Jenkins 未能提供产物', 502);
+    reply.code(response.status);
     reply.header('Content-Type', 'application/octet-stream');
     reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(artifact.fileName)}`);
+    for (const header of ['content-length', 'content-range', 'accept-ranges']) {
+      const value = response.headers.get(header) || (header === 'content-length' ? response.verifiedLength : null);
+      if (value) reply.header(header, value);
+    }
     return reply.send(Readable.fromWeb(response.body));
   });
   if (staticRoot && existsSync(staticRoot)) await app.register(staticFiles, { root: staticRoot });
