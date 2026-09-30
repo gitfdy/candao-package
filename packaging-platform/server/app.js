@@ -22,7 +22,7 @@ export async function createApp({ config, store, remotes, staticRoot }) {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('Referrer-Policy', 'no-referrer');
     reply.header('X-Frame-Options', 'DENY');
-    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+    reply.header('Content-Security-Policy', "default-src 'self'; script-src 'self' https://hm.baidu.com; style-src 'self' 'unsafe-inline'; connect-src 'self' https://hm.baidu.com; img-src 'self' data: https://hm.baidu.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
     if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
   });
   await app.register(cookie);
