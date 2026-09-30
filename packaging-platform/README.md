@@ -108,3 +108,9 @@ npm run build
 打开 `http://localhost:3101`，账号 `preview`，密码 `local-preview-only`。此模式仅绑定本机，分支来自真实 GitLab，分支说明保存在 `data/branch-preview.sqlite`，重启后保留。Jenkins 操作禁用，不需要 Jenkins Token。此账号仅用于本地预览；正式部署仍应创建个人账号并运行 `npm start`。原 `node test/preview.js` 保持使用模拟数据。
 
 配置同上，服务端运行 `npm start`；另开终端 `npm run dev`。开发时 `publicOrigin` 改成 Vite 实际地址（通常 `http://localhost:5173`）。Vite 将 `/api` 转发到 3100。生产只需 `npm run build` 后运行 Node。
+
+### 个人备忘录
+
+左侧“个人备忘录”用于保存跨项目的命令和操作说明，支持搜索、复制、编辑和删除。需要登录，每个账号只能访问自己的内容；多人使用同一个账号会共享该账号的备忘录。访客不可访问。
+
+内容保存在平台现有 SQLite 数据库中，升级后首次启动自动创建表，无需额外配置。备份平台数据库时会一并备份备忘录。该功能不提供加密保险箱能力，请勿用于保存密码或令牌。

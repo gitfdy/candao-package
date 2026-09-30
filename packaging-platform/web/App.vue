@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { api } from './api.js';
 import Select from 'primevue/select';
+import MemoBook from './components/MemoBook.vue';
 import BuildForm from './components/BuildForm.vue';
 import BranchManager from './components/BranchManager.vue';
 import BuildHistory from './components/BuildHistory.vue';
@@ -11,7 +12,12 @@ const guest = ref(null);
 const projects = ref([]), projectId = ref(''), branches = ref([]);
 const page = ref('build'), error = ref(''), busy = ref(false), loading = ref(false), selectedBuild = ref(null);
 const project = computed(() => projects.value.find(item => item.id === projectId.value));
-const labels = { build: '发起打包', branches: '分支信息管理', history: '构建记录' };
+const memoBook = ref(null);
+function changePage(key) {
+  if (memoBook.value && !memoBook.value.canLeave()) return;
+  page.value = key; selectedBuild.value = null;
+}
+const labels = { build: '发起打包', branches: '分支信息管理', history: '构建记录', memos: '个人备忘录' };
 let branchRequest = 0;
 function sessionExpired() {
   const wasLoggedIn = Boolean(user.value);
@@ -42,6 +48,7 @@ async function login() {
   finally { busy.value = false; }
 }
 async function logout() {
+  if (memoBook.value && !memoBook.value.canLeave()) return;
   try { await api('/logout', { method: 'POST' }); await resume(); }
   catch (issue) { error.value = issue.message; }
 }
@@ -77,13 +84,14 @@ function changeProject() { selectedBuild.value = null; loadBranches(); }
       <div class="workspace">
         <aside class="sidebar" aria-label="工作区导航">
           <div class="project-bar"><div><span class="eyebrow">当前工作区</span><label for="project">选择项目</label></div><Select v-model="projectId" inputId="project" :options="projects" optionLabel="name" optionValue="id" class="full-width" @change="changeProject" /><span class="project-meta"><span class="status-dot"></span>{{ branches.length }} 个可用分支</span></div>
-          <nav aria-label="Mobile Build 功能导航"><button v-for="(label, key) in labels" :key="key" :aria-pressed="page === key" @click="page = key; selectedBuild = null">{{ label }}</button></nav>
+          <nav aria-label="Mobile Build 功能导航"><button v-for="(label, key) in labels" :key="key" :aria-pressed="page === key" @click="changePage(key)">{{ label }}</button></nav>
         </aside>
         <main class="workspace-main">
-        <p class="breadcrumb">工作台 <span>/</span> {{ project?.name }} <span>/</span> {{ labels[page] }}</p>
-        <div v-if="error" role="alert" class="error">{{ error }} <button @click="loadBranches">重新读取分支</button></div>
-        <Transition name="view" mode="out-in"><div v-if="project" :key="`${project.id}-${page}`" class="page-content">
-          <BuildForm v-if="page === 'build'" :project="project" :branches="branches" :loading="loading" @submitted="submitted" />
+        <p class="breadcrumb">工作台 <span>/</span> <template v-if="page !== 'memos'">{{ project?.name }} <span>/</span></template> {{ labels[page] }}</p>
+        <div v-if="error && page !== 'memos'" role="alert" class="error">{{ error }} <button @click="loadBranches">重新读取分支</button></div>
+        <Transition name="view" mode="out-in"><div v-if="project || page === 'memos'" :key="page === 'memos' ? 'memos' : `${project.id}-${page}`" class="page-content">
+          <MemoBook v-if="page === 'memos'" ref="memoBook" :user="user" />
+          <BuildForm v-else-if="page === 'build'" :project="project" :branches="branches" :loading="loading" @submitted="submitted" />
           <BranchManager v-else-if="page === 'branches'" :project="project" :branches="branches" :loading="loading" :can-edit="user.role === 'admin'" @refresh="loadBranches" />
           <BuildHistory v-else :project="project" :selected-id="selectedBuild" />
         </div></Transition>

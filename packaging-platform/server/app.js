@@ -4,6 +4,7 @@ import staticFiles from '@fastify/static';
 import { Readable } from 'node:stream';
 import { existsSync } from 'node:fs';
 import { authentication } from './auth.js';
+import { memoRoutes } from './memos.js';
 import { projects, buildParameters, fail } from './projects.js';
 
 export async function createApp({ config, store, remotes, staticRoot }) {
@@ -26,6 +27,7 @@ export async function createApp({ config, store, remotes, staticRoot }) {
   });
   await app.register(cookie);
   authentication(app, config);
+  memoRoutes(app, db);
   app.get('/api/projects', async () => catalog.map(({ id, name, environments, formats, products, signing }) => ({
     id, name, environments, formats, products, signing, signingKeys: config.signingKeys?.[id] || []
   })));

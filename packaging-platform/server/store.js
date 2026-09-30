@@ -3,6 +3,10 @@ import { DatabaseSync } from 'node:sqlite';
 export function openStore(path) {
   const db = new DatabaseSync(path);
   db.exec(`PRAGMA journal_mode=WAL;
+    CREATE TABLE IF NOT EXISTS memos (
+      id TEXT PRIMARY KEY, owner TEXT NOT NULL, title TEXT NOT NULL, content TEXT NOT NULL,
+      revision INTEGER NOT NULL, updated TEXT NOT NULL);
+    CREATE INDEX IF NOT EXISTS memos_owner ON memos(owner);
     CREATE TABLE IF NOT EXISTS notes (
       project TEXT NOT NULL, branch TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL,
       actor TEXT NOT NULL, updated TEXT NOT NULL, PRIMARY KEY(project, branch));

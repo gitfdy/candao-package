@@ -211,3 +211,48 @@ test('TOA builds disable Incident even when an old client requests it', () => {
     assert.equal(parameters.SEND_DINGTALK, 'true');
   }
 });
+
+test('personal memos enforce ownership, validate input, and preserve newer edits', async t => {
+  const f = await fixture(t, { allowGuestBuilds: true });
+  const tester = await f.login('tester');
+  const id = 'a'.repeat(32), path = '/api/memos/' + id;
+  const draft = { title: '常用命令', content: 'echo "<script>test</script>"\n  keep spaces\n', revision: 0 };
+  assert.equal((await f.send('GET', '/api/memos', undefined, '')).statusCode, 403);
+  assert.equal((await f.send('PUT', path, draft, '')).statusCode, 403);
+  assert.equal((await f.send('PUT', path, { ...draft, title: ' ' })).statusCode, 400);
+  assert.equal((await f.send('PUT', path, { ...draft, content: 'x'.repeat(20001) })).statusCode, 400);
+  assert.equal((await f.send('PUT', '/api/memos/invalid', draft)).statusCode, 400);
+  const saved = (await f.send('PUT', path, draft, tester)).json();
+  assert.equal(saved.revision, 1);
+  assert.equal(saved.content, draft.content);
+  // Even administrators cannot access another account's memos.
+  assert.deepEqual((await f.send('GET', '/api/memos')).json(), []);
+  assert.equal((await f.send('GET', '/api/memos', undefined, tester)).json()[0].id, id);
+  assert.equal((await f.send('PUT', path, { ...draft, revision: 1 })).statusCode, 404);
+  assert.equal((await f.send('DELETE', path, { revision: 1 })).statusCode, 404);
+  assert.equal((await f.send('PUT', path, draft, tester)).statusCode, 409);
+  const updated = (await f.send('PUT', path, { ...draft, revision: 1, content: 'changed' }, tester)).json();
+  assert.equal(updated.revision, 2);
+  assert.equal((await f.send('DELETE', path, { revision: 1 }, tester)).statusCode, 409);
+  assert.equal((await f.send('DELETE', path, { revision: 2 }, '')).statusCode, 403);
+  assert.equal((await f.send('DELETE', path, { revision: 2 }, tester)).statusCode, 200);
+  assert.deepEqual((await f.send('GET', '/api/memos', undefined, tester)).json(), []);
+  assert.equal((await f.send('PUT', path, updated, tester)).statusCode, 409);
+});
+
+test('memos persist across database reopening without changing existing tables', async t => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const directory = mkdtempSync(join(tmpdir(), 'platform-memos-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, 'data.sqlite');
+  const first = openStore(path);
+  first.db.prepare('INSERT INTO memos VALUES(?,?,?,?,?,?)').run('b'.repeat(32), 'tester', 'Command', 'git status\n', 1, '2026-09-30');
+  first.close();
+  const reopened = openStore(path);
+  try {
+    assert.equal(reopened.db.prepare('SELECT content FROM memos WHERE owner=?').get('tester').content, 'git status\n');
+    assert.equal(reopened.db.prepare('SELECT count(*) AS count FROM builds').get().count, 0);
+  } finally { reopened.close(); }
+});
