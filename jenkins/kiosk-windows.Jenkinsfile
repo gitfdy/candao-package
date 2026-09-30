@@ -102,6 +102,8 @@ try {
             if ($env:PROJECT -ne 'queue-screen') {
               $env:PATH = "$((Get-Location).Path)\\.fvm\\flutter_sdk\\bin;C:\\ProgramData\\chocolatey\\bin;$env:PATH"
             }
+            # Runner sources contain UTF-8 text; MSVC otherwise uses the node's ANSI code page (936).
+            $env:CL = "$env:CL /utf-8".Trim()
             $sdkLock = $null
             if ($env:PROJECT -ne 'queue-screen') {
               $lockPath = "D:\\work\\candao-package\\.jenkins-sdk\\${env:PROJECT}-sdk.lock"
