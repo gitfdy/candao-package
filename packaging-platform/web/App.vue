@@ -19,7 +19,18 @@ function changePage(key) {
   if (memoBook.value && !memoBook.value.canLeave()) return;
   page.value = key; selectedBuild.value = null;
 }
-const labels = { build: '发起打包', branches: '分支信息管理', history: '构建记录', memos: '个人备忘录' };
+async function goHome() {
+  if (busy.value) return;
+  if (user.value) changePage('build');
+  else {
+    password.value = '';
+    await resume();
+  }
+}
+const labels = computed(() => ({
+  build: '发起打包', branches: '分支信息管理', history: '构建记录',
+  ...(user.value?.role === 'admin' ? { memos: '个人备忘录' } : {})
+}));
 let branchRequest = 0;
 function sessionExpired() {
   const wasLoggedIn = Boolean(user.value);
@@ -74,10 +85,9 @@ function changeProject() { selectedBuild.value = null; loadBranches(); }
 
 <template>
   <div class="shell">
-    <header class="site-header"><div class="brand-lockup"><strong class="brand">Mobile Build</strong><small>BUILD &amp; RELEASE CONSOLE</small></div><QueueStatus v-if="user" ref="queueStatus" /><div v-if="user" class="row header-actions"><span class="user-badge"><span class="status-dot"></span>{{ user.role === 'guest' ? '访客' : `${user.username} · ${user.role === 'admin' ? '管理员' : '构建成员'}` }}</span><button v-if="user.role === 'guest'" @click="user = null; error = ''">管理员登录</button><button v-else @click="logout">退出登录</button></div></header>
+    <header class="site-header"><a class="brand-lockup" href="/" aria-label="Mobile Build 首页" @click.prevent="goHome"><strong class="brand">Mobile Build</strong><small>BUILD &amp; RELEASE CONSOLE</small></a><QueueStatus v-if="user" ref="queueStatus" /><div v-if="user" class="row header-actions"><span class="user-badge"><span class="status-dot"></span>{{ user.role === 'guest' ? '访客' : `${user.username} · ${user.role === 'admin' ? '管理员' : '构建成员'}` }}</span><button v-if="user.role === 'guest'" @click="user = null; error = ''">管理员登录</button><button v-else @click="logout">退出登录</button></div></header>
     <main v-if="!user" class="login">
       <section class="panel login-card">
-        <button v-if="guest" class="login-back" @click="resume"><span aria-hidden="true">←</span> 返回打包平台</button>
         <div class="login-intro"><span class="eyebrow">管理员功能</span><h1>{{ guest ? '管理员登录' : '登录 Mobile Build' }}</h1><p>{{ guest ? '登录后可管理分支需求名称和变更备注。' : '登录后选择需求、发起打包并获取安装包。' }}</p></div>
         <form class="login-form" @submit.prevent="login"><label for="login-username">账号</label><input id="login-username" v-model="username" required autocomplete="username" placeholder="请输入管理员账号"><label for="login-password">密码</label><input id="login-password" v-model="password" type="password" required autocomplete="current-password" placeholder="请输入密码"><button class="primary login-submit" :disabled="busy">{{ busy ? '正在登录…' : '登录管理后台' }}</button></form>
       </section>
@@ -93,7 +103,7 @@ function changeProject() { selectedBuild.value = null; loadBranches(); }
         <p class="breadcrumb">工作台 <span>/</span> <template v-if="page !== 'memos'">{{ project?.name }} <span>/</span></template> {{ labels[page] }}</p>
         <div v-if="error && page !== 'memos'" role="alert" class="error">{{ error }} <button @click="loadBranches">重新读取分支</button></div>
         <Transition name="view" mode="out-in"><div v-if="project || page === 'memos'" :key="page === 'memos' ? 'memos' : `${project.id}-${page}`" class="page-content">
-          <MemoBook v-if="page === 'memos'" ref="memoBook" :user="user" />
+          <MemoBook v-if="page === 'memos' && user.role === 'admin'" ref="memoBook" :user="user" />
           <BuildForm v-else-if="page === 'build'" :project="project" :branches="branches" :loading="loading" @submitted="submitted" />
           <BranchManager v-else-if="page === 'branches'" :project="project" :branches="branches" :loading="loading" :can-edit="user.role === 'admin'" @refresh="loadBranches" />
           <BuildHistory v-else :project="project" :selected-id="selectedBuild" />

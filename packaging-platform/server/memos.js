@@ -2,7 +2,7 @@ import { fail } from './projects.js';
 
 export function memoRoutes(app, db) {
   const owner = request => {
-    if (request.user.role === 'guest') fail('请登录后使用个人备忘录', 403);
+    if (request.user.role !== 'admin') fail('仅管理员可使用个人备忘录', 403);
     return request.user.username;
   };
   const memoId = request => {

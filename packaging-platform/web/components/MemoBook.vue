@@ -67,7 +67,7 @@ function beforeUnload(event) {
 }
 onMounted(() => {
   window.addEventListener('beforeunload', beforeUnload);
-  if (props.user.role !== 'guest') load();
+  if (props.user.role === 'admin') load();
 });
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 </script>
@@ -75,9 +75,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 <template>
   <div class="row spread page-heading">
     <div><h1>个人备忘录</h1><p>记录常用命令和操作说明，跨项目使用，仅当前账号可见。</p></div>
-    <button v-if="user.role !== 'guest' && !editing" class="primary" :disabled="busy || loading" @click="edit(null)">添加备忘录</button>
+    <button v-if="user.role === 'admin' && !editing" class="primary" :disabled="busy || loading" @click="edit(null)">添加备忘录</button>
   </div>
-  <p v-if="user.role === 'guest'" class="panel">请先通过右上角登录，再使用个人备忘录。</p>
+  <p v-if="user.role !== 'admin'" class="panel">仅管理员可使用个人备忘录。</p>
   <template v-else>
     <form v-if="editing" class="panel memo-editor" @submit.prevent="save">
       <label for="memo-title">标题</label>

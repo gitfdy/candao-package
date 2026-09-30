@@ -266,8 +266,12 @@ test('TOA builds disable Incident even when an old client requests it', () => {
 });
 
 test('personal memos enforce ownership, validate input, and preserve newer edits', async t => {
-  const f = await fixture(t, { allowGuestBuilds: true });
-  const tester = await f.login('tester');
+  const f = await fixture(t, {
+    allowGuestBuilds: true,
+    users: [...config.users, { ...config.users[0], username: 'other-admin' }]
+  });
+  const tester = await f.login('other-admin');
+  const builder = await f.login('tester');
   const id = 'a'.repeat(32), path = '/api/memos/' + id;
   const draft = { title: '常用命令', content: 'echo "<script>test</script>"\n  keep spaces\n', revision: 0 };
   assert.equal((await f.send('GET', '/api/memos', undefined, '')).statusCode, 403);
@@ -275,6 +279,9 @@ test('personal memos enforce ownership, validate input, and preserve newer edits
   assert.equal((await f.send('PUT', path, { ...draft, title: ' ' })).statusCode, 400);
   assert.equal((await f.send('PUT', path, { ...draft, content: 'x'.repeat(20001) })).statusCode, 400);
   assert.equal((await f.send('PUT', '/api/memos/invalid', draft)).statusCode, 400);
+  assert.equal((await f.send('GET', '/api/memos', undefined, builder)).statusCode, 403);
+  assert.equal((await f.send('PUT', path, draft, builder)).statusCode, 403);
+  assert.equal((await f.send('DELETE', path, { revision: 1 }, builder)).statusCode, 403);
   const saved = (await f.send('PUT', path, draft, tester)).json();
   assert.equal(saved.revision, 1);
   assert.equal(saved.content, draft.content);
