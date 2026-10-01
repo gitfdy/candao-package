@@ -72,11 +72,12 @@ function ConvertTo-TappoPhoneCiSigning([string]$Script) {
     return $Script.Replace('    buildTypes {', $signing).Replace($legacy, 'signingConfig = signingConfigs.getByName("jenkinsRelease")')
 }
 
-function Get-TappoArtifactVersion([string]$Manifest, [string]$LocalProperties) {
-    $version = [regex]::Match($Manifest, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
-    if (!$version) {
-        # Flutter writes the effective version even when pubspec omits it.
-        $version = [regex]::Match($LocalProperties, '(?m)^flutter\.versionName=([0-9]+(?:\.[0-9]+){1,2}(?:-[0-9A-Za-z.-]+)?)\r?$').Groups[1].Value
+function Get-TappoArtifactVersion([string]$Manifest, [string]$ApkBadging) {
+    # APK metadata includes Gradle defaults and overrides absent from pubspec.
+    $version = if ($ApkBadging) {
+        [regex]::Match($ApkBadging, "(?m)^package: .*?versionName='([0-9]+(?:\.[0-9]+){1,2}(?:-[0-9A-Za-z.-]+)?)'").Groups[1].Value
+    } else {
+        [regex]::Match($Manifest, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
     }
     if (!$version) { throw 'Cannot read application version' }
     return $version
@@ -188,17 +189,20 @@ function Invoke-TappoAndroidBuild {
         } finally { Pop-Location }
         $output = if ($env:PACKAGE_FORMAT -eq 'apk') { "$app/build/app/outputs/flutter-apk/app-release.apk" } else { "$app/build/app/outputs/bundle/release/app-release.aab" }
         if (!(Test-Path $output) -or (Get-Item $output).Length -le 0) { throw 'Expected Android artifact missing or empty' }
+        $apkBadging = ''
         if ($env:PACKAGE_FORMAT -eq 'apk') {
             $verification = Invoke-SigningTool $apksigner @('verify', '--print-certs', $output)
             $match = [regex]::Match(($verification -join "`n"), 'certificate SHA-256 digest:\s*([0-9a-fA-F]{64})')
             if (!$match.Success -or $match.Groups[1].Value.ToUpperInvariant() -ne $expected) { throw 'APK signing certificate mismatch' }
+            $apkBadging = & (Join-Path $buildTools.FullName 'aapt.exe') dump badging $output
+            if ($LASTEXITCODE -ne 0) { throw 'Cannot read APK metadata' }
         } else {
             Invoke-SigningTool $jarsigner @('-verify', $output) | Out-Null
             $cert = Invoke-SigningTool $keytool @('-printcert', '-rfc', '-jarfile', $output)
             if ((Get-CertificateSha256 $cert) -ne $expected) { throw 'AAB signing certificate mismatch' }
         }
         $manifest = Get-Content "$app/pubspec.yaml" -Raw
-        $appVersion = Get-TappoArtifactVersion $manifest (Get-Content "$app/android/local.properties" -Raw)
+        $appVersion = Get-TappoArtifactVersion $manifest ($apkBadging -join "`n")
         $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $signingLabel = if ($env:SIGNING_KEY) { 'signed' } else { 'internal' }
         $name = "${env:PROJECT}_android_${stamp}_v${appVersion}_${env:ENVIRONMENT}_${signingLabel}.${env:PACKAGE_FORMAT}"

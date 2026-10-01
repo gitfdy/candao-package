@@ -69,8 +69,10 @@ Reject { ConvertTo-TappoPhoneCiSigning ($legacyGradle.Replace('getByName("debug"
 Reject { ConvertTo-TappoPhoneCiSigning ($legacyGradle + '
 signingConfigs { create("custom") }') }
 Write-Output 'PASS: legacy Phone signing adaptation, environment-based signing preservation and unknown-config rejection'
-Assert ((Get-TappoArtifactVersion 'version: 2.4.10+123' 'flutter.versionName=1.0') -eq '2.4.10') 'Declared version must remain unchanged'
-Assert ((Get-TappoArtifactVersion 'name: mobile' "flutter.sdk=C:\sdk`r`nflutter.versionName=1.0`r`n") -eq '1.0') 'Missing version must use the generated Flutter version'
+Assert ((Get-TappoArtifactVersion 'version: 2.4.10+123' '') -eq '2.4.10') 'AAB declared version must remain unchanged'
+$badging = "package: name='com.example.mobile' versionCode='1' versionName='1.0' platformBuildVersionName='16'"
+Assert ((Get-TappoArtifactVersion 'name: mobile' $badging) -eq '1.0') 'Missing version must use actual APK metadata'
+Assert ((Get-TappoArtifactVersion 'version: 2.4.10+123' $badging) -eq '1.0') 'APK metadata must reflect actual Gradle overrides'
 Reject { Get-TappoArtifactVersion 'name: mobile' '' }
-Reject { Get-TappoArtifactVersion 'name: mobile' 'flutter.versionName=../invalid' }
-Write-Output 'PASS: declared and generated artifact versions, missing and unsafe version rejection'
+Reject { Get-TappoArtifactVersion 'name: mobile' ($badging.Replace("versionName='1.0'", "versionName='../invalid'")) }
+Write-Output 'PASS: declared AAB and actual APK versions, missing and unsafe version rejection'
