@@ -4,6 +4,7 @@ import { dirname, resolve } from 'node:path';
 const base = process.env.PLATFORM_URL || 'http://127.0.0.1:3100';
 const origin = process.env.PLATFORM_ORIGIN || 'http://package.zj2.natnps.cn';
 const runId = process.env.QC_MATRIX_RUN_ID || '2026-10-01';
+const branch = process.env.QC_MATRIX_BRANCH || 'devlop_qc';
 const selectedKeys = new Set((process.env.QC_MATRIX_KEYS || '').split(',').filter(Boolean));
 const output = resolve(`data/qc-build-matrix-${runId}.json`);
 const report = resolve(`data/qc-build-matrix-${runId}.md`);
@@ -19,7 +20,7 @@ const matrix = [
 const plan = matrix.flatMap(([project, format, product, environments]) => environments.map(environment => ({
   key: `${project}:${environment}:${format}`,
   project, environment, format, ...(product ? { product } : {}),
-  branch: 'devlop_qc', upload: true, notify: false,
+  branch, upload: true, notify: false,
   signingKey: '', versionCode: '',
   requestId: `qc-matrix-${runId}-${project}-${environment}-${format}`,
   status: 'PENDING'
@@ -66,7 +67,7 @@ function markdown(state) {
     const dufs = item.dufsLinks?.map(value => `[下载](${value})`).join('<br>') || '—';
     return `| ${names[item.project]} | ${item.environment} | ${item.format.toUpperCase()} | ${item.status} | ${item.number || '—'} | ${artifact} | ${dufs} |`;
   });
-  return `# QC 分支多环境构建测试报告\n\n- 分支：\`devlop_qc\`\n- 开始时间：${state.startedAt}\n- 完成时间：${state.finishedAt || '执行中'}\n- 结果：${Object.entries(counts).map(([key, values]) => `${key} ${values.length}`).join('，')}\n\n| 项目 | 环境 | 格式 | 结果 | Jenkins | 产物 | DUFS |\n|---|---|---|---|---:|---|---|\n${rows.join('\n')}\n`;
+  return `# ${branch} 分支多环境构建测试报告\n\n- 分支：\`${branch}\`\n- 开始时间：${state.startedAt}\n- 完成时间：${state.finishedAt || '执行中'}\n- 结果：${Object.entries(counts).map(([key, values]) => `${key} ${values.length}`).join('，')}\n\n| 项目 | 环境 | 格式 | 结果 | Jenkins | 产物 | DUFS |\n|---|---|---|---|---:|---|---|\n${rows.join('\n')}\n`;
 }
 
 async function save(state) {
