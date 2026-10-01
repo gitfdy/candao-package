@@ -48,3 +48,24 @@ if ($env:JAVA_HOME) {
         Write-Output 'PASS: real keystore generation, certificate fingerprint and bad-password rejection'
     } finally { if (Test-Path $tempKey) { Remove-Item $tempKey -Force } }
 }
+
+$legacyGradle = @'
+android {
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("debug")
+        }
+    }
+}
+'@
+$prepared = ConvertTo-TappoPhoneCiSigning $legacyGradle
+Assert ($prepared.Contains('signingConfig = signingConfigs.getByName("jenkinsRelease")')) 'Legacy release must use the CI signer'
+Assert (!$prepared.Contains('getByName("debug")')) 'Legacy debug signer must be replaced'
+foreach ($name in @('KEYSTORE_PATH', 'STORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD')) {
+    Assert ($prepared.Contains('System.getenv("TAPPO_PHONE_' + $name + '")')) 'CI signing field missing'
+}
+Assert ((ConvertTo-TappoPhoneCiSigning $prepared) -ceq $prepared) 'Existing environment-based signing must remain unchanged'
+Reject { ConvertTo-TappoPhoneCiSigning ($legacyGradle.Replace('getByName("debug")', 'getByName("custom")')) }
+Reject { ConvertTo-TappoPhoneCiSigning ($legacyGradle + '
+signingConfigs { create("custom") }') }
+Write-Output 'PASS: legacy Phone signing adaptation, environment-based signing preservation and unknown-config rejection'

@@ -46,6 +46,32 @@ function Get-CertificateSha256([string[]]$PemLines) {
     finally { $hash.Dispose() }
 }
 
+# Older Phone branches use the Flutter template debug signer and ignore CI credentials.
+# Adapt only that known template in the disposable checkout; never relax verification.
+function ConvertTo-TappoPhoneCiSigning([string]$Script) {
+    $variables = @('TAPPO_PHONE_KEYSTORE_PATH', 'TAPPO_PHONE_STORE_PASSWORD', 'TAPPO_PHONE_KEY_ALIAS', 'TAPPO_PHONE_KEY_PASSWORD')
+    if (@($variables | Where-Object { !$Script.Contains('System.getenv("' + $_ + '")') }).Count -eq 0) { return $Script }
+    $legacy = 'signingConfig = signingConfigs.getByName("debug")'
+    if ([regex]::Matches($Script, [regex]::Escape($legacy)).Count -ne 1 -or
+        [regex]::Matches($Script, '(?m)^    buildTypes \{').Count -ne 1 -or
+        $Script -match 'signingConfigs\s*\{') {
+        throw 'Unrecognized Tappo Phone signing configuration; refusing to override it'
+    }
+    $signing = @'
+    signingConfigs {
+        create("jenkinsRelease") {
+            storeFile = file(requireNotNull(System.getenv("TAPPO_PHONE_KEYSTORE_PATH")))
+            storePassword = requireNotNull(System.getenv("TAPPO_PHONE_STORE_PASSWORD"))
+            keyAlias = requireNotNull(System.getenv("TAPPO_PHONE_KEY_ALIAS"))
+            keyPassword = requireNotNull(System.getenv("TAPPO_PHONE_KEY_PASSWORD"))
+        }
+    }
+
+    buildTypes {
+'@
+    return $Script.Replace('    buildTypes {', $signing).Replace($legacy, 'signingConfig = signingConfigs.getByName("jenkinsRelease")')
+}
+
 function Invoke-TappoAndroidBuild {
     $ErrorActionPreference = 'Stop'
     $buildArgs = Get-TappoBuildArguments $env:PROJECT $env:ENVIRONMENT $env:PACKAGE_FORMAT $env:VERSION_CODE
@@ -77,6 +103,8 @@ function Invoke-TappoAndroidBuild {
     $sdkLock = $null
     $text = $null
     $keyPropertiesBackup = $null
+    $phoneGradlePath = Join-Path $app 'android/app/build.gradle.kts'
+    $phoneGradleOriginal = $null
     try {
         while ($null -eq $sdkLock) {
             try { $sdkLock = [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None) }
@@ -117,6 +145,15 @@ function Invoke-TappoAndroidBuild {
                 'keyPassword=' + (ConvertTo-JavaProperty $env:TAPPO_PHONE_KEY_PASSWORD)
             ) -join "`n"
             [IO.File]::WriteAllText($keyProperties, $text, [Text.UTF8Encoding]::new($false))
+        }
+        if ($env:PROJECT -eq 'tappo_phone') {
+            $original = [IO.File]::ReadAllText($phoneGradlePath)
+            $prepared = ConvertTo-TappoPhoneCiSigning $original
+            if ($prepared -ne $original) {
+                $phoneGradleOriginal = [IO.File]::ReadAllBytes($phoneGradlePath)
+                [IO.File]::WriteAllText($phoneGradlePath, $prepared, [Text.UTF8Encoding]::new($false))
+                Write-Output 'Configured legacy Tappo Phone release signing from Jenkins credentials.'
+            }
         }
         Push-Location $app
         try {
@@ -163,6 +200,7 @@ function Invoke-TappoAndroidBuild {
     } finally {
         if ($env:PROJECT -eq 'tappo' -and (Test-Path $keyProperties) -and $text) { Remove-Item -LiteralPath $keyProperties -Force }
         if ($keyPropertiesBackup -and (Test-Path $keyPropertiesBackup)) { Move-Item -LiteralPath $keyPropertiesBackup -Destination $keyProperties }
+        if ($null -ne $phoneGradleOriginal) { [IO.File]::WriteAllBytes($phoneGradlePath, $phoneGradleOriginal) }
         if ($sdkLock) { $sdkLock.Dispose() }
     }
 }
