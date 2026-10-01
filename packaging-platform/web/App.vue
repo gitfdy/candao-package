@@ -12,6 +12,7 @@ import { readRoute, routeUrl } from './navigation.js';
 
 const user = ref(null), username = ref(''), password = ref('');
 const guest = ref(null);
+const sessionLoading = ref(true), sessionError = ref('');
 const projects = ref([]), projectId = ref(''), branches = ref([]);
 const page = ref('build'), error = ref(''), busy = ref(false), loading = ref(false), selectedBuild = ref(null);
 const project = computed(() => projects.value.find(item => item.id === projectId.value));
@@ -53,7 +54,7 @@ function changePage(key) {
   updateUrl();
 }
 async function goHome() {
-  if (busy.value) return;
+  if (busy.value || sessionLoading.value) return;
   if (user.value) changePage('build');
   else {
     password.value = '';
@@ -99,9 +100,18 @@ async function logout() {
   catch (issue) { error.value = issue.message; }
 }
 async function resume() {
+  sessionLoading.value = true; sessionError.value = '';
   user.value = null; branches.value = []; selectedBuild.value = null; page.value = 'build'; error.value = '';
-  try { user.value = await api('/me'); if (user.value.role === 'guest') guest.value = user.value; await initialize(); }
-  catch (issue) { if (issue.status !== 401) error.value = issue.message; }
+  try {
+    user.value = await api('/me');
+    if (user.value.role === 'guest') guest.value = user.value;
+  } catch (issue) {
+    if (issue.status !== 401) sessionError.value = issue.message;
+  } finally { sessionLoading.value = false; }
+  if (user.value) {
+    try { await initialize(); }
+    catch (issue) { error.value = issue.message; }
+  }
 }
 onMounted(async () => {
   window.addEventListener('platform-session-expired', sessionExpired);
@@ -125,7 +135,11 @@ function selectBuild(id) { selectedBuild.value = id; updateUrl(); }
 <template>
   <div class="shell">
     <header class="site-header"><a class="brand-lockup" href="/" aria-label="Mobile Build 首页" @click.prevent="goHome"><strong class="brand">Mobile Build</strong><small>BUILD &amp; RELEASE CONSOLE</small></a><QueueStatus v-if="user" ref="queueStatus" /><div v-if="user" class="row header-actions"><span class="user-badge"><span class="status-dot"></span>{{ user.role === 'guest' ? '访客' : `${user.username} · ${user.role === 'admin' ? '管理员' : '构建成员'}` }}</span><button v-if="user.role === 'guest'" @click="user = null; error = ''">管理员登录</button><button v-else @click="logout">退出登录</button></div></header>
-    <main v-if="!user" class="login">
+    <main v-if="sessionLoading || sessionError" class="login session-state" :aria-busy="sessionLoading">
+      <p v-if="sessionLoading" role="status">正在进入工作台…</p>
+      <div v-else class="panel"><p class="error" role="alert">{{ sessionError }}</p><button class="primary" @click="resume">重新连接</button></div>
+    </main>
+    <main v-else-if="!user" class="login">
       <section class="panel login-card">
         <div class="login-intro"><span class="eyebrow">管理员功能</span><h1>{{ guest ? '管理员登录' : '登录 Mobile Build' }}</h1><p>{{ guest ? '登录后可管理分支需求名称和变更备注。' : '登录后选择需求、发起打包并获取安装包。' }}</p></div>
         <form class="login-form" @submit.prevent="login"><label for="login-username">账号</label><input id="login-username" v-model="username" required autocomplete="username" placeholder="请输入管理员账号"><label for="login-password">密码</label><input id="login-password" v-model="password" type="password" required autocomplete="current-password" placeholder="请输入密码"><button class="primary login-submit" :disabled="busy">{{ busy ? '正在登录…' : '登录管理后台' }}</button></form>

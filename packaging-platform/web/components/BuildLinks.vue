@@ -67,16 +67,16 @@ onUnmounted(() => { observer?.disconnect(); controller?.abort(); });
 </script>
 
 <template>
-  <div ref="root" class="record-links">
+  <div ref="root" class="record-links download-links">
     <span v-if="loading && !loaded" class="muted">正在读取下载链接…</span>
     <template v-if="loaded">
-      <div v-for="link in externalLinks" :key="link.index" class="record-download-row">
-        <span class="record-download-label">外网下载：</span>
-        <button class="record-download-link" type="button" :disabled="isDownloading(link.index)" @click="startDownload(row.id, link.artifact, link.index)">{{ link.name }}<span v-if="isDownloading(link.index)">（下载中）</span></button>
+      <div v-for="link in externalLinks" :key="link.index" class="download-option">
+        <small v-if="externalLinks.length > 1" class="download-file-name">{{ link.name }}</small>
+        <button class="download-action download-external" type="button" :title="link.name" :aria-label="`外网下载 ${link.name}`" :disabled="isDownloading(link.index)" @click="startDownload(row.id, link.artifact, link.index)">{{ isDownloading(link.index) ? '下载中…' : '外网下载' }}</button>
       </div>
-      <div v-for="link in dufsLinks" :key="link" class="record-download-row">
-        <span class="record-download-label">DUFS 下载（内网）：</span>
-        <div class="record-download-value"><a class="record-download-link" :href="link" :title="link" target="_blank" rel="noopener noreferrer">{{ fileName(link) }}</a><button class="copy-address" type="button" :aria-label="`复制 ${fileName(link)} 的 DUFS 地址`" @click="copyLink(link)">复制地址</button></div>
+      <div v-for="link in dufsLinks" :key="link" class="download-option">
+        <small v-if="dufsLinks.length > 1" class="download-file-name">{{ fileName(link) }}</small>
+        <div class="download-button-group"><a class="download-action" :href="link" :title="fileName(link)" :aria-label="`DUFS 下载 ${fileName(link)}`" target="_blank" rel="noopener noreferrer">DUFS 下载</a><button class="download-copy" type="button" :aria-label="`复制 ${fileName(link)} 的 DUFS 链接`" @click="copyLink(link)">复制链接</button></div>
       </div>
 
       <span v-if="copyMessage" class="muted" role="status">{{ copyMessage }}</span>

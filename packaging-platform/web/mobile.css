@@ -1,3 +1,20 @@
+/* Download actions share the same layout in records and build details. */
+.record-links.download-links { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.download-option { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; max-width: 100%; }
+.download-file-name { overflow-wrap: anywhere; }
+.download-links .download-action, .download-links .download-copy { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-control); background: var(--surface-card); color: var(--ink-strong); font-size: 13px; font-weight: 500; line-height: 20px; text-decoration: none; white-space: nowrap; }
+.download-links .download-external { color: var(--brand-strong); background: var(--brand-soft); border-color: #b3d8c9; }
+.download-links .download-action:hover, .download-links .download-copy:hover { color: var(--brand-strong); background: var(--brand-soft); border-color: var(--brand); }
+.download-button-group { display: inline-flex; max-width: 100%; }
+.download-button-group .download-action { border-radius: var(--radius-control) 0 0 var(--radius-control); }
+.download-button-group .download-copy { margin-left: -1px; border-radius: 0 var(--radius-control) var(--radius-control) 0; color: var(--ink-muted); }
+.download-button-group :focus-visible { position: relative; z-index: 1; }
+.download-links > :is([role=status], .muted) { flex-basis: 100%; }
+.session-state { text-align: center; color: var(--ink-muted); }
+@media (max-width: 800px) {
+  .download-links .download-action, .download-links .download-copy { min-height: 44px; padding: 10px 12px; }
+}
+
 /* Loaded after the desktop styles so responsive rules share one cascade. */
 @media (max-width: 800px) {
   html { scrollbar-gutter: auto; }
