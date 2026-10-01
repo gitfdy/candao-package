@@ -69,3 +69,8 @@ Reject { ConvertTo-TappoPhoneCiSigning ($legacyGradle.Replace('getByName("debug"
 Reject { ConvertTo-TappoPhoneCiSigning ($legacyGradle + '
 signingConfigs { create("custom") }') }
 Write-Output 'PASS: legacy Phone signing adaptation, environment-based signing preservation and unknown-config rejection'
+Assert ((Get-TappoArtifactVersion 'version: 2.4.10+123' 'flutter.versionName=1.0') -eq '2.4.10') 'Declared version must remain unchanged'
+Assert ((Get-TappoArtifactVersion 'name: mobile' "flutter.sdk=C:\sdk`r`nflutter.versionName=1.0`r`n") -eq '1.0') 'Missing version must use the generated Flutter version'
+Reject { Get-TappoArtifactVersion 'name: mobile' '' }
+Reject { Get-TappoArtifactVersion 'name: mobile' 'flutter.versionName=../invalid' }
+Write-Output 'PASS: declared and generated artifact versions, missing and unsafe version rejection'

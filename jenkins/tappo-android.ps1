@@ -72,6 +72,16 @@ function ConvertTo-TappoPhoneCiSigning([string]$Script) {
     return $Script.Replace('    buildTypes {', $signing).Replace($legacy, 'signingConfig = signingConfigs.getByName("jenkinsRelease")')
 }
 
+function Get-TappoArtifactVersion([string]$Manifest, [string]$LocalProperties) {
+    $version = [regex]::Match($Manifest, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
+    if (!$version) {
+        # Flutter writes the effective version even when pubspec omits it.
+        $version = [regex]::Match($LocalProperties, '(?m)^flutter\.versionName=([0-9]+(?:\.[0-9]+){1,2}(?:-[0-9A-Za-z.-]+)?)\r?$').Groups[1].Value
+    }
+    if (!$version) { throw 'Cannot read application version' }
+    return $version
+}
+
 function Invoke-TappoAndroidBuild {
     $ErrorActionPreference = 'Stop'
     $buildArgs = Get-TappoBuildArguments $env:PROJECT $env:ENVIRONMENT $env:PACKAGE_FORMAT $env:VERSION_CODE
@@ -188,8 +198,7 @@ function Invoke-TappoAndroidBuild {
             if ((Get-CertificateSha256 $cert) -ne $expected) { throw 'AAB signing certificate mismatch' }
         }
         $manifest = Get-Content "$app/pubspec.yaml" -Raw
-        $appVersion = [regex]::Match($manifest, '(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)').Groups[1].Value
-        if (!$appVersion) { throw 'Cannot read application version' }
+        $appVersion = Get-TappoArtifactVersion $manifest (Get-Content "$app/android/local.properties" -Raw)
         $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
         $signingLabel = if ($env:SIGNING_KEY) { 'signed' } else { 'internal' }
         $name = "${env:PROJECT}_android_${stamp}_v${appVersion}_${env:ENVIRONMENT}_${signingLabel}.${env:PACKAGE_FORMAT}"
