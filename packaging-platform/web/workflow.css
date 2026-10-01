@@ -1,8 +1,9 @@
-:root { --ease-ui: cubic-bezier(.22, 1, .36, 1); }
+:root { --ease-out: cubic-bezier(.215, .61, .355, 1); --ease-in: cubic-bezier(.55, .055, .675, .19); --ease-ui: cubic-bezier(.645, .045, .355, 1); --motion-fast: 120ms; --motion-normal: 200ms; }
 .page-content { min-width: 0; }
-.view-enter-active, .view-leave-active { transition: opacity 180ms ease, transform 220ms var(--ease-ui); }
-.view-enter-from { opacity: 0; transform: translateY(8px); }
-.view-leave-to { opacity: 0; transform: translateY(-4px); }
+.view-enter-active { transition: opacity var(--motion-normal) var(--ease-out), transform var(--motion-normal) var(--ease-out); }
+.view-leave-active { transition: opacity var(--motion-fast) var(--ease-in), transform var(--motion-fast) var(--ease-in); }
+.view-enter-from { opacity: 0; transform: translateX(12px); }
+.view-leave-to { opacity: 0; transform: translateX(-8px); }
 
 .build-layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 20px; align-items: start; }
 .build-fields { min-width: 0; }

@@ -183,6 +183,21 @@ export async function createApp({ config, store, remotes, staticRoot }) {
     const log = await remotes.log(row.job, row.number, start);
     return { ...log, text: redact(log.text) };
   });
+  app.get('/api/builds/:id/dufs-links', async request => {
+    const row = buildById(request.params.id);
+    if (!row.number) return { links: [] };
+    const build = await remotes.build(row.job, row.number);
+    const artifact = build.artifacts?.find(item => item.fileName === 'dufs-links.txt');
+    if (!artifact) return { links: [] };
+    const response = await remotes.artifact(row.job, row.number, artifact.relativePath);
+    const content = await response.text();
+    const links = content.split(/\r?\n/).map(line => line.trim()).flatMap(link => {
+      if (!/^https?:\/\//i.test(link)) return [];
+      try { new URL(link); return [link]; }
+      catch { return []; }
+    });
+    return { links };
+  });
   app.get('/api/builds/:id/artifacts/:index', async (request, reply) => {
     const row = buildById(request.params.id);
     if (!row.number) fail('构建尚无产物', 404);

@@ -61,11 +61,11 @@ test('guest builds allow browsing and submission while notes remain admin-only',
 });
 
 test('explicit external origins are accepted while unrelated origins remain blocked', async t => {
-  const f = await fixture(t, { allowGuestBuilds: true, allowedOrigins: ['http://package.sa1.tunnelfrp.com'] });
+  const f = await fixture(t, { allowGuestBuilds: true, allowedOrigins: ['http://additional.example'] });
   const call = origin => f.app.inject({ method: 'POST', url: '/api/logout', headers: { origin, 'x-platform-request': '1' } });
-  assert.equal((await call('http://package.sa1.tunnelfrp.com')).statusCode, 200);
+  assert.equal((await call('http://additional.example')).statusCode, 200);
   assert.equal((await call('http://other.example')).statusCode, 403);
-  assert.equal((await call('http://package.sa1.tunnelfrp.com.evil.example')).statusCode, 403);
+  assert.equal((await call('http://additional.example.evil.example')).statusCode, 403);
   assert.equal(f.count(), 0);
 });
 
@@ -213,6 +213,17 @@ test('Jenkins activity reads queued Pipeline steps and occupied executors', asyn
   assert.equal(first.running, 2);
   assert.equal(first.queue[0].task.url, 'job/TOA-KIOSK-WINDOWS/21/');
   assert.equal(calls.length, 2);
+});
+
+test('DUFS links preserve verified addresses from the Jenkins artifact', async t => {
+  const f = await fixture(t);
+  const row = (await f.send('POST', '/api/builds', build)).json();
+  f.store.db.prepare('UPDATE builds SET number=? WHERE id=?').run(12, row.id);
+  f.remotes.build = async () => ({ artifacts: [{ fileName: 'dufs-links.txt', relativePath: 'dufs-links.txt' }] });
+  f.remotes.artifact = async () => new Response('http://192.168.225.46:5000/dufs/TOA-POS-Windows/app.exe\n');
+  const response = await f.send('GET', `/api/builds/${row.id}/dufs-links`);
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json().links, ['http://192.168.225.46:5000/dufs/TOA-POS-Windows/app.exe']);
 });
 
 test('queue status combines active builds across projects without exposing request payloads', async t => {

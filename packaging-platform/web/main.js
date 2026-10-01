@@ -6,6 +6,7 @@ import App from './App.vue';
 import './style.css';
 import './workflow.css';
 import './polish.css';
+import './mobile.css';
 
 window._hmt = window._hmt || [];
 const analytics = document.createElement('script');

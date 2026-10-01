@@ -7,6 +7,8 @@ import BuildForm from './components/BuildForm.vue';
 import BranchManager from './components/BranchManager.vue';
 import BuildHistory from './components/BuildHistory.vue';
 import QueueStatus from './components/QueueStatus.vue';
+import DownloadStatus from './components/DownloadStatus.vue';
+import { readRoute, routeUrl } from './navigation.js';
 
 const user = ref(null), username = ref(''), password = ref('');
 const guest = ref(null);
@@ -15,9 +17,40 @@ const page = ref('build'), error = ref(''), busy = ref(false), loading = ref(fal
 const project = computed(() => projects.value.find(item => item.id === projectId.value));
 const memoBook = ref(null);
 const queueStatus = ref(null);
+const branchManager = ref(null), buildForm = ref(null);
+let historyIndex = Number(history.state?.platformIndex) || 0, returning = false;
+history.replaceState({ ...history.state, platformIndex: historyIndex }, '', location.href);
+function canLeave() {
+  return (!memoBook.value || memoBook.value.canLeave()) && (!branchManager.value || branchManager.value.canLeave()) && (!buildForm.value || buildForm.value.canLeave());
+}
+function updateUrl(replace = false) {
+  const url = routeUrl({ project: projectId.value, page: page.value, build: selectedBuild.value }, location.href);
+  if (!replace && url === location.pathname + location.search + location.hash) return;
+  if (!replace) historyIndex++;
+  history[replace ? 'replaceState' : 'pushState']({ ...history.state, platformIndex: historyIndex }, '', url);
+}
+function restoreRoute() {
+  const route = readRoute(location.search);
+  const nextProject = projects.value.some(item => item.id === route.project) ? route.project : projects.value[0]?.id || '';
+  const changed = nextProject !== projectId.value;
+  projectId.value = nextProject;
+  page.value = labels.value[route.page] ? route.page : 'build';
+  selectedBuild.value = page.value === 'history' ? route.build : null;
+  updateUrl(true);
+  return changed;
+}
+function onPopState(event) {
+  const targetIndex = Number(event.state?.platformIndex) || 0;
+  if (returning) { returning = false; return; }
+  if (!canLeave()) { returning = true; history.go(historyIndex - targetIndex); return; }
+  historyIndex = targetIndex;
+  if (user.value && restoreRoute()) loadBranches();
+}
 function changePage(key) {
-  if (memoBook.value && !memoBook.value.canLeave()) return;
+  if (key === page.value && !selectedBuild.value) return;
+  if (!canLeave()) return;
   page.value = key; selectedBuild.value = null;
+  updateUrl();
 }
 async function goHome() {
   if (busy.value) return;
@@ -49,7 +82,7 @@ async function loadBranches() {
 }
 async function initialize() {
   projects.value = await api('/projects');
-  projectId.value = projects.value[0]?.id || '';
+  restoreRoute();
   if (projectId.value) await loadBranches();
 }
 async function login() {
@@ -61,7 +94,7 @@ async function login() {
   finally { busy.value = false; }
 }
 async function logout() {
-  if (memoBook.value && !memoBook.value.canLeave()) return;
+  if (!canLeave()) return;
   try { await api('/logout', { method: 'POST' }); await resume(); }
   catch (issue) { error.value = issue.message; }
 }
@@ -72,15 +105,21 @@ async function resume() {
 }
 onMounted(async () => {
   window.addEventListener('platform-session-expired', sessionExpired);
+  window.addEventListener('popstate', onPopState);
   await resume();
 });
-onUnmounted(() => window.removeEventListener('platform-session-expired', sessionExpired));
+onUnmounted(() => { window.removeEventListener('platform-session-expired', sessionExpired); window.removeEventListener('popstate', onPopState); });
 function submitted(build) {
   queueStatus.value?.refresh();
   if (build.project !== projectId.value) return;
   selectedBuild.value = build.id; page.value = 'history';
+  updateUrl();
 }
-function changeProject() { selectedBuild.value = null; loadBranches(); }
+function changeProject(id) {
+  if (id === projectId.value || !canLeave()) return;
+  projectId.value = id; selectedBuild.value = null; updateUrl(); loadBranches();
+}
+function selectBuild(id) { selectedBuild.value = id; updateUrl(); }
 </script>
 
 <template>
@@ -96,7 +135,7 @@ function changeProject() { selectedBuild.value = null; loadBranches(); }
     <template v-else>
       <div class="workspace">
         <aside class="sidebar" aria-label="工作区导航">
-          <div class="project-bar"><div><span class="eyebrow">当前工作区</span><label for="project">选择项目</label></div><Select v-model="projectId" inputId="project" :options="projects" optionLabel="name" optionValue="id" class="full-width" @change="changeProject" /><span class="project-meta"><span class="status-dot"></span>{{ branches.length }} 个可用分支</span></div>
+          <div class="project-bar"><div><label for="project">选择项目</label></div><Select :modelValue="projectId" inputId="project" :options="projects" optionLabel="name" optionValue="id" class="full-width" @update:modelValue="changeProject" /><span class="project-meta" role="status"><span class="status-dot"></span>{{ loading ? '正在读取分支…' : `${branches.length} 个可用分支` }}</span></div>
           <nav aria-label="Mobile Build 功能导航"><button v-for="(label, key) in labels" :key="key" :aria-pressed="page === key" @click="changePage(key)">{{ label }}</button></nav>
         </aside>
         <main class="workspace-main">
@@ -104,12 +143,13 @@ function changeProject() { selectedBuild.value = null; loadBranches(); }
         <div v-if="error && page !== 'memos'" role="alert" class="error">{{ error }} <button @click="loadBranches">重新读取分支</button></div>
         <Transition name="view" mode="out-in"><div v-if="project || page === 'memos'" :key="page === 'memos' ? 'memos' : `${project.id}-${page}`" class="page-content">
           <MemoBook v-if="page === 'memos' && user.role === 'admin'" ref="memoBook" :user="user" />
-          <BuildForm v-else-if="page === 'build'" :project="project" :branches="branches" :loading="loading" @submitted="submitted" />
-          <BranchManager v-else-if="page === 'branches'" :project="project" :branches="branches" :loading="loading" :can-edit="user.role === 'admin'" @refresh="loadBranches" />
-          <BuildHistory v-else :project="project" :selected-id="selectedBuild" />
+          <BuildForm v-else-if="page === 'build'" ref="buildForm" :project="project" :branches="branches" :loading="loading" :user-key="user.username || user.role" @submitted="submitted" />
+          <BranchManager v-else-if="page === 'branches'" ref="branchManager" :project="project" :branches="branches" :loading="loading" :can-edit="user.role === 'admin'" @refresh="loadBranches" />
+          <BuildHistory v-else :project="project" :selected-id="selectedBuild" @select-build="selectBuild" />
         </div></Transition>
         </main>
       </div>
     </template>
+    <DownloadStatus />
   </div>
 </template>

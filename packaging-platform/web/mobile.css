@@ -1,0 +1,82 @@
+/* Loaded after the desktop styles so responsive rules share one cascade. */
+@media (max-width: 800px) {
+  html { scrollbar-gutter: auto; }
+  .shell { min-height: 100dvh; }
+  .site-header { position: relative; padding: 12px 16px; gap: 12px; }
+  .brand-lockup, .header-actions, .user-badge { min-width: 0; }
+  .header-actions { width: auto; margin-left: auto; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+  .user-badge { overflow-wrap: anywhere; }
+  .site-header .queue-status { order: 3; width: 100%; }
+  .queue-status .queue-trigger { width: 100%; min-height: 44px; justify-content: center; white-space: normal; flex-wrap: wrap; }
+  .queue-popover { left: 0; right: auto; width: 100%; max-height: 65dvh; overflow-y: auto; --popover-anchor: translateX(0); transform-origin: top center; }
+  .workspace { display: block; padding: 0 0 env(safe-area-inset-bottom, 0px); }
+  .sidebar { position: static; background: var(--surface-card); }
+  .sidebar .project-bar { display: grid; grid-template-columns: auto minmax(0, 1fr); padding: 16px; gap: 12px; }
+  .sidebar .project-bar > div { min-width: 0; }
+  .sidebar .project-bar label { margin: 0; }
+  .sidebar .project-bar .p-select { width: 100%; min-width: 0; }
+  .sidebar nav { flex-direction: row; flex-wrap: nowrap; gap: 4px; padding: 0 12px; overflow-x: auto; overscroll-behavior-x: contain; scroll-padding-inline: 12px; }
+  .sidebar nav button { flex: 0 0 auto; width: auto; min-height: 44px; padding: 12px; border-radius: 6px 6px 0 0; border-bottom: 0; }
+  .sidebar nav button[aria-pressed=true] { box-shadow: inset 0 -3px 0 var(--brand); }
+  .workspace-main { padding: 20px 16px 32px; }
+  .build-layout, .build-detail-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .page-heading { gap: 12px; margin-bottom: 20px; }
+  .page-heading h1 { margin-bottom: 0; }
+  .panel { padding: 16px; }
+  .record-list { padding-block: 0; }
+  .fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 16px; }
+  .fields > *, .control-field, .section-heading > div { min-width: 0; }
+  .section-number, .review-icon { flex-shrink: 0; }
+  .directory-tools, .history-filters { flex-direction: column; align-items: stretch; gap: 12px; }
+  .directory-tools label, .history-filters label:first-child, .history-filters .status-field { width: 100%; max-width: none; }
+  .directory-tools .muted { padding: 0; white-space: normal; }
+  .record { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .record > .row { justify-self: stretch; justify-content: space-between; flex-wrap: wrap; }
+  .record > button { justify-self: start; }
+  button { min-height: 44px; }
+  input:not([type=checkbox]):not([type=radio]), select, textarea, .p-select-label, .p-select-filter { font-size: 16px; }
+  .p-select { min-height: 44px; max-width: 100%; }
+  .sidebar .project-bar .p-select-label, .history-filters .status-field .p-select-label { font-size: 16px; min-height: 42px; }
+  .p-select-label { min-width: 0; }
+  .p-select-overlay { max-width: calc(100vw - 32px); }
+  .p-select-option { white-space: normal; overflow-wrap: anywhere; min-height: 44px; }
+  .branch-choice { max-width: 100%; }
+  .branch-choice strong { overflow-wrap: anywhere; }
+  .record-links .copy-address, .record-links button, .download-tasks button { min-height: 44px; padding: 8px 10px; }
+  .record-links .record-download-link { min-height: 44px; padding-block: 10px; }
+  .download-status { right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); max-height: 50dvh; }
+  .download-status-heading { min-height: 48px; flex-wrap: wrap; }
+  .build-summary { position: static; }
+  .detail-back, .detail-actions { gap: 8px; }
+}
+
+@media (max-width: 520px) {
+  .site-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .brand { font-size: 17px; }
+  .brand-lockup small { font-size: 8px; letter-spacing: .04em; }
+  .header-actions { max-width: 160px; flex-direction: column; align-items: flex-end; }
+  .header-actions button { padding-inline: 10px; }
+  .site-header .queue-status { grid-column: 1 / -1; }
+  .workspace-main { padding: 20px 12px 32px; }
+  .sidebar .project-bar { padding: 12px; }
+  .sidebar nav { padding-inline: 8px; }
+  .workspace-main .breadcrumb { white-space: normal; overflow-wrap: anywhere; margin-bottom: 16px; }
+  h1, .login-intro h1 { font-size: 22px; }
+  .row.spread.page-heading { flex-wrap: wrap; gap: 12px; }
+  .row.spread.page-heading > button { padding-inline: 12px; }
+  .fields, .toggle-grid, .review-grid { grid-template-columns: minmax(0, 1fr); }
+  .review-grid { margin-top: 0; gap: 12px; }
+  .review-grid dt { margin-top: 0; }
+  .distribution-options summary { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; min-height: 44px; }
+  .distribution-options summary span { grid-column: 2; overflow-wrap: anywhere; }
+  .build-form-actions .primary, .footer > button { width: 100%; min-width: 0; }
+  .footer { gap: 12px; margin-top: 20px; padding-top: 16px; }
+  .record-download-row { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .record-download-value { align-items: center; gap: 4px 8px; }
+  .detail-back > button, .detail-actions > button { flex: 1 1 120px; }
+  .memo-editor .row > button { flex: 1 1 100px; }
+  .memo-list .row { gap: 8px; }
+  .memo-list .row > button { flex: 1 1 72px; }
+  .login { width: calc(100% - 24px); margin-block: 24px; }
+  .login-card { padding: 20px 16px; }
+}

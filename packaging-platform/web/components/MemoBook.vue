@@ -74,7 +74,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
 
 <template>
   <div class="row spread page-heading">
-    <div><h1>个人备忘录</h1><p>记录常用命令和操作说明，跨项目使用，仅当前账号可见。</p></div>
+    <div><h1>个人备忘录</h1><p>仅当前账号可见</p></div>
     <button v-if="user.role === 'admin' && !editing" class="primary" :disabled="busy || loading" @click="edit(null)">添加备忘录</button>
   </div>
   <p v-if="user.role !== 'admin'" class="panel">仅管理员可使用个人备忘录。</p>
@@ -87,13 +87,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnload));
       <div class="row"><button class="primary" :disabled="busy || !editing.title.trim()">{{ busy ? '保存中…' : '保存' }}</button><button type="button" :disabled="busy" @click="closeEditor">返回列表</button></div>
     </form>
     <template v-else>
-      <div class="directory-tools"><label>搜索备忘录<input v-model="search" type="search" placeholder="搜索标题或命令"></label><button :disabled="loading || busy" @click="load">刷新</button></div>
+      <div class="directory-tools"><label>搜索备忘录<input v-model="search" type="search" placeholder="搜索标题或命令"></label><button v-if="error" :disabled="loading || busy" @click="load">重试</button></div>
       <p v-if="loading" role="status">正在读取备忘录…</p>
       <div v-else class="memo-list">
         <article v-for="memo in filtered" :key="memo.id" class="panel">
           <div class="row spread"><h2>{{ memo.title }}</h2><small>{{ new Date(memo.updated).toLocaleString() }}</small></div>
           <pre class="memo-content">{{ memo.content }}</pre>
-          <div class="row"><button :disabled="busy" @click="copy(memo.content)">复制内容</button><button :disabled="busy" @click="edit(memo)">编辑</button><button :disabled="busy" @click="remove(memo)">删除</button></div>
+          <div class="row"><button :disabled="busy" @click="copy(memo.content)">复制内容</button><button :disabled="busy" @click="edit(memo)">编辑</button><button class="danger-action" :disabled="busy" @click="remove(memo)">删除</button></div>
         </article>
         <p v-if="!filtered.length">{{ search ? '没有匹配的备忘录。' : '还没有备忘录，添加一条常用命令吧。' }}</p>
       </div>

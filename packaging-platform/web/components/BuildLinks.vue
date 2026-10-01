@@ -1,10 +1,14 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue';
 import { api } from '../api.js';
+import { downloads, startDownload, downloadKey } from '../download.js';
+import { copyText } from '../clipboard.js';
 
-const props = defineProps({ row: { type: Object, required: true } });
+const props = defineProps({ row: { type: Object, required: true }, build: Object });
 const root = ref(null), loading = ref(false), loaded = ref(false), error = ref('');
 const externalLinks = ref([]), dufsLinks = ref([]), dufsError = ref(''), dufsLoading = ref(false);
+const copyMessage = ref('');
+const isDownloading = index => downloads.some(task => task.key === downloadKey(props.row.id, index) && task.status === 'running');
 let observer, controller;
 
 async function load() {
@@ -15,24 +19,22 @@ async function load() {
   loading.value = true; loaded.value = false; error.value = ''; dufsError.value = ''; dufsLoading.value = false;
   externalLinks.value = []; dufsLinks.value = [];
   try {
-    const build = await api(`/builds/${props.row.id}`, { signal });
+    const build = props.build || await api(`/builds/${props.row.id}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]) });
     const artifacts = build.artifacts || [];
-    const origin = build.publicOrigin.replace(/\/$/, '');
     externalLinks.value = artifacts.flatMap((artifact, index) => artifact.fileName === 'dufs-links.txt' ? [] : [{
       name: artifact.fileName,
-      url: `${origin}/api/builds/${props.row.id}/artifacts/${index}`
+      artifact,
+      index
     }]);
     if (!signal.aborted) loaded.value = true;
     const linksIndex = artifacts.findIndex(artifact => artifact.fileName === 'dufs-links.txt');
-    if (JSON.parse(props.row.payload).upload && linksIndex >= 0) {
+    if (linksIndex >= 0) {
       dufsLoading.value = true;
       try {
-        const response = await fetch(`/api/builds/${props.row.id}/artifacts/${linksIndex}`, {
-          cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(120000)])
+        const response = await api(`/builds/${props.row.id}/dufs-links`, {
+          signal: AbortSignal.any([signal, AbortSignal.timeout(120000)])
         });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const content = await response.text();
-        dufsLinks.value = content.split(/\r?\n/).map(line => line.trim()).filter(line => /^https?:\/\//i.test(line));
+        dufsLinks.value = response.links;
       } catch (issue) {
         if (!signal.aborted) dufsError.value = issue.name === 'TimeoutError' ? 'DUFS 链接读取超时' : 'DUFS 链接读取失败';
       } finally { if (!signal.aborted) dufsLoading.value = false; }
@@ -49,6 +51,11 @@ function fileName(url) {
   catch { return '下载文件'; }
 }
 
+async function copyLink(link) {
+  try { await copyText(link); copyMessage.value = 'DUFS 地址已复制'; }
+  catch (issue) { copyMessage.value = issue.message; }
+}
+
 onMounted(() => {
   if (!('IntersectionObserver' in window)) { load(); return; }
   observer = new IntersectionObserver(entries => {
@@ -63,8 +70,16 @@ onUnmounted(() => { observer?.disconnect(); controller?.abort(); });
   <div ref="root" class="record-links">
     <span v-if="loading && !loaded" class="muted">正在读取下载链接…</span>
     <template v-if="loaded">
-      <a v-for="link in externalLinks" :key="link.url" :href="link.url" :title="link.url" target="_blank" rel="noopener noreferrer">外网下载 · {{ link.name }}</a>
-      <a v-for="link in dufsLinks" :key="link" :href="link" :title="link" target="_blank" rel="noopener noreferrer">DUFS 下载 · {{ fileName(link) }}</a>
+      <div v-for="link in externalLinks" :key="link.index" class="record-download-row">
+        <span class="record-download-label">外网下载：</span>
+        <button class="record-download-link" type="button" :disabled="isDownloading(link.index)" @click="startDownload(row.id, link.artifact, link.index)">{{ link.name }}<span v-if="isDownloading(link.index)">（下载中）</span></button>
+      </div>
+      <div v-for="link in dufsLinks" :key="link" class="record-download-row">
+        <span class="record-download-label">DUFS 下载（内网）：</span>
+        <div class="record-download-value"><a class="record-download-link" :href="link" :title="link" target="_blank" rel="noopener noreferrer">{{ fileName(link) }}</a><button class="copy-address" type="button" :aria-label="`复制 ${fileName(link)} 的 DUFS 地址`" @click="copyLink(link)">复制地址</button></div>
+      </div>
+
+      <span v-if="copyMessage" class="muted" role="status">{{ copyMessage }}</span>
       <span v-if="dufsLoading" class="muted">正在读取 DUFS 链接…</span>
       <span v-if="!externalLinks.length && !dufsLinks.length && !dufsLoading && !dufsError" class="muted">暂无下载链接</span>
     </template>
