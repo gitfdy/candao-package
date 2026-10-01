@@ -4,6 +4,7 @@ import staticFiles from '@fastify/static';
 import { Readable } from 'node:stream';
 import { existsSync } from 'node:fs';
 import { authentication } from './auth.js';
+import { kioskSupport } from './kiosk-support.js';
 import { memoRoutes } from './memos.js';
 import { projects, buildParameters, fail } from './projects.js';
 
@@ -37,6 +38,14 @@ export async function createApp({ config, store, remotes, staticRoot }) {
     const notes = db.prepare('SELECT * FROM notes WHERE project=?').all(project.id);
     return names.map(branch => ({ branch, ...notes.find(note => note.branch === branch) }));
   });
+  app.get('/api/projects/:project/build-support', async request => {
+    const project = projectById(request.params.project);
+    if (project.id !== 'kiosk') return { supported: true, reason: '' };
+    const { branch, product } = request.query;
+    buildParameters(project, { branch, product, environment: project.environments[0], format: project.formats[0] });
+    if (!(await remotes.branches(project)).includes(branch)) fail('分支不存在，请刷新列表');
+    return kioskSupport(remotes, project, branch, product);
+  });
   app.put('/api/projects/:project/notes', async request => {
     if (request.user.role !== 'admin') fail('仅管理员可维护分支说明', 403);
     const project = projectById(request.params.project);
@@ -62,6 +71,10 @@ export async function createApp({ config, store, remotes, staticRoot }) {
     const project = projectById(input.project);
     const parameters = buildParameters(project, input, config.signingKeys?.[project.id] || []);
     if (!(await remotes.branches(project)).includes(input.branch)) fail('分支不存在，请刷新列表');
+    if (project.id === 'kiosk') {
+      const support = await kioskSupport(remotes, project, input.branch, input.product);
+      if (!support.supported) fail(support.reason, 400);
+    }
     const note = db.prepare('SELECT name FROM notes WHERE project=? AND branch=?').get(project.id, input.branch);
     const payload = { ...input, name: note?.name || input.branch, parameters };
     // Reserve before POST: a timeout may mean Jenkins accepted the request. Never auto-resubmit.

@@ -67,3 +67,15 @@ Flutter Debug 可执行文件已成功生成，但 `main` 分支的 `scripts/bui
 ## 重试说明
 
 Tappo 与 Tappo Phone 首轮受到 Jenkins 节点访问 GitHub 时的 TLS/`early EOF` 中断影响，构建本体未启动。测试对 6 个组合进行了定向重试；Tappo beta 再次遇到 TLS 中断后进行了第二次重试。上表只采用成功进入实际构建流程后的最终有效结果。
+
+## Kiosk 后续处理：分支支持校验（2026-10-01）
+
+用户确认保留应用仓库 main 现状，在打包平台明确提示不支持 Kiosk；不将失败任务改记为打包成功。
+
+- Jenkins #37 实际检出 self-checkout `main@fa4a4b473cfb9a072159751debff56ca7059cccf`，在编译前报 `Unknown parameter: --product`。
+- 该源码不含 `lib/core/config/product_config.dart`，WebView 默认入口为 Self Checkout。不能通过删除产品参数来冒充 Kiosk 构建。
+- 平台根据所选分支的 Windows 参数解析、`product_type` 编译参数与产品配置检查支持情况，不按分支名称硬编码。
+- 页面在不支持时显示原因并禁用下一步；后端提交时再次校验，在创建构建记录和调用 Jenkins 前拒绝请求。GitLab 读取异常时阻止提交。
+- 已用本次拉取的真实源码验证：main 的四个环境均返回 400，Jenkins 调用为 0；`devlop_qc@e5a0ff6cf927b2e81eff128e3e882afa165011c7` 通过支持检查。
+- 本地浏览器验证：main 显示不支持提示且下一步禁用；切换 devlop_qc 后恢复可操作。
+- 25 项自动测试和网页构建通过。未修改应用 main，未触发新构建、上传或通知；线上平台需部署此版本后生效。

@@ -25,10 +25,13 @@ const app = await createApp({
   },
   store, staticRoot: resolve(root, 'dist'),
   remotes: live ? {
-    branches: remoteClients(local).branches,
+    branches: remoteClients(local).branches, sourceFile: remoteClients(local).sourceFile,
     trigger: unavailable, queue: unavailable, build: unavailable, log: unavailable, artifact: unavailable
   } : {
     branches: async () => ['devlop_qc', 'feature/example'],
+    sourceFile: async (_, __, path) => path.endsWith('.bat')
+      ? 'if /i "%~1"=="--product" (\n--dart-define=product_type=%PRODUCT_TYPE%'
+      : "String.fromEnvironment('product_type'); ProductType.kiosk",
     trigger: async () => ++requests,
     queue: async () => ({ executable: { number: 1 } }),
     build: async () => ({ building: false, result: 'SUCCESS', artifacts: [{ fileName: 'example.txt', relativePath: 'example.txt' }] }),

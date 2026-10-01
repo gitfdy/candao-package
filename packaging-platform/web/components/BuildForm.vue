@@ -28,7 +28,26 @@ const branch = computed(() => props.branches.find(item => item.branch === form.b
 const branchOptions = computed(() => [...props.branches]
   .sort((a, b) => Number(Boolean(b.name)) - Number(Boolean(a.name)) || a.branch.localeCompare(b.branch))
   .map(item => ({ ...item, displayLabel: item.name && item.name !== item.branch ? `${item.name} · ${item.branch}` : item.branch })));
-const canReview = computed(() => !props.loading && !!branch.value);
+const support = ref(null), supportLoading = ref(false), supportError = ref('');
+let supportRequest = 0;
+watch(() => [form.branch, form.product, props.loading, props.branches], async () => {
+  const request = ++supportRequest;
+  support.value = null; supportError.value = ''; supportLoading.value = false;
+  if (props.project.id !== 'kiosk' || props.loading || !branch.value) return;
+  supportLoading.value = true;
+  try {
+    const query = new URLSearchParams({ branch: form.branch, product: form.product });
+    const result = await api(`/projects/${props.project.id}/build-support?${query}`);
+    if (request === supportRequest) support.value = result;
+  } catch (issue) {
+    if (request === supportRequest) supportError.value = issue.message;
+  } finally {
+    if (request === supportRequest) supportLoading.value = false;
+  }
+}, { immediate: true });
+onBeforeUnmount(() => supportRequest++);
+const canReview = computed(() => !props.loading && !!branch.value &&
+  (props.project.id !== 'kiosk' || (!supportLoading.value && support.value?.supported === true)));
 watch(() => [props.branches, props.loading], ([branches, loading]) => {
   if (loading || !branches.length) return;
   if (!branches.some(item => item.branch === form.branch)) form.branch = branches.find(item => item.branch === 'devlop_qc')?.branch || branches[0]?.branch || '';
@@ -63,6 +82,9 @@ async function submit() {
       <p v-if="loading" role="status">正在读取远端分支…</p><p v-else-if="!branches.length">暂无可用分支，请确认 GitLab 连接或刷新列表。</p>
       <div v-if="branch?.description" class="selected-branch"><p>{{ branch.description }}</p></div>
       <div class="section-heading section-divider"><span class="section-number">02</span><div><h2>打包配置</h2></div></div><div class="fields"><div class="control-field"><label for="environment-select">目标环境</label><Select v-model="form.environment" inputId="environment-select" :options="project.environments" class="full-width" /></div><div v-if="project.formats.length > 1" class="control-field"><label for="format-select">包格式</label><Select v-model="form.format" inputId="format-select" :options="project.formats" class="full-width" /></div><div v-if="project.products" class="control-field"><label for="product-select">产品</label><Select v-model="form.product" inputId="product-select" :options="project.products" class="full-width" /></div></div>
+      <p v-if="supportLoading" role="status">正在检查所选分支的产品支持…</p>
+      <p v-else-if="supportError" class="error" role="alert">{{ supportError }}。请刷新分支列表后重试。</p>
+      <p v-else-if="support && !support.supported" class="error" role="alert">{{ support.reason }}</p>
       <template v-if="project.signing"><div class="fields"><label>签名凭据<select v-model="form.signingKey" :required="project.id === 'tappo-phone' && form.format === 'aab'"><option value="">内部测试签名</option><option v-for="key in project.signingKeys" :key="key.id" :value="key.id">{{ key.label }}</option></select></label><label>版本号（可选）<input v-model="form.versionCode" inputmode="numeric" pattern="[1-9][0-9]*" placeholder="留空沿用源码 versionCode"></label></div><p class="muted">Tappo Phone AAB 必须选择原 Google Play 上传密钥。APK 内部测试签名不能覆盖不同签名的应用。</p></template>
       <section class="distribution-options" aria-labelledby="distribution-heading"><h2 id="distribution-heading">分发选项</h2><div class="toggle-grid"><label class="check"><input v-model="form.upload" type="checkbox"><span><strong>上传 DUFS</strong></span></label><label class="check"><input v-model="form.notify" type="checkbox"><span><strong>钉钉通知</strong><small>构建结束后发送通知</small></span></label></div></section>
       <div class="build-form-actions"><button class="primary" :disabled="!canReview">下一步：核对配置</button></div>

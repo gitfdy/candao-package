@@ -327,3 +327,58 @@ test('memos persist across database reopening without changing existing tables',
     assert.equal(reopened.db.prepare('SELECT count(*) AS count FROM builds').get().count, 0);
   } finally { reopened.close(); }
 });
+
+test('Kiosk source support blocks unsupported branches before Jenkins and permits supported products', async t => {
+  const f = await fixture(t, { allowGuestBuilds: true });
+  f.remotes.branches = async () => ['main', 'devlop_qc', 'feature/kiosk'];
+  const script = 'if /i "%~1"=="--product" (\nset "BUILD_DEFINES=!BUILD_DEFINES! --dart-define=product_type=%PRODUCT_TYPE%"';
+  f.remotes.sourceFile = async (project, branch, path) => {
+    assert.equal(project.id, 'kiosk');
+    if (branch === 'main') return path.endsWith('.bat') ? 'echo Unknown parameter: %~1' : null;
+    return path.endsWith('.bat') ? script : "String.fromEnvironment('product_type'); ProductType.kiosk";
+  };
+  const url = '/api/projects/kiosk/build-support?branch=main&product=kiosk';
+  const support = (await f.send('GET', url, undefined, '')).json();
+  assert.equal(support.supported, false);
+  assert.match(support.reason, /尚未实现 Kiosk/);
+  for (const environment of ['staging', 'test-prod', 'release', 'debug']) {
+    const response = await f.send('POST', '/api/builds', {
+      ...build, project: 'kiosk', branch: 'main', product: 'kiosk', environment,
+      requestId: 'unsupported-kiosk-' + environment
+    }, '');
+    assert.equal(response.statusCode, 400);
+    assert.match(response.json().error, /尚未实现 Kiosk/);
+  }
+  assert.equal(f.count(), 0);
+  assert.equal(f.store.db.prepare('SELECT count(*) AS count FROM builds').get().count, 0);
+  assert.equal((await f.send('GET', '/api/projects/kiosk/build-support?branch=missing&product=kiosk')).statusCode, 400);
+  assert.equal((await f.send('GET', '/api/projects/kiosk/build-support?branch=main&product=unknown')).statusCode, 400);
+  for (const branch of ['devlop_qc', 'feature/kiosk']) {
+    assert.equal((await f.send('GET', '/api/projects/kiosk/build-support?branch=' + encodeURIComponent(branch) + '&product=kiosk')).json().supported, true);
+  }
+  const accepted = await f.send('POST', '/api/builds', { ...build, project: 'kiosk', branch: 'devlop_qc', product: 'kiosk', environment: 'staging' });
+  assert.equal(accepted.statusCode, 201);
+  assert.equal(f.sent().parameters.PRODUCT, 'kiosk');
+  assert.equal(f.count(), 1);
+  f.remotes.sourceFile = async () => { throw new Error('GitLab offline'); };
+  assert.equal((await f.send('POST', '/api/builds', { ...build, project: 'kiosk', branch: 'devlop_qc', product: 'kiosk', environment: 'staging', requestId: 'source-offline-123456' })).statusCode, 502);
+  assert.equal(f.count(), 1);
+});
+
+test('Kiosk check requires runtime support, and GitLab file reads encode paths and fail closed', async () => {
+  const { kioskSupport } = await import('../server/kiosk-support.js');
+  const project = projects.find(item => item.id === 'kiosk');
+  const script = 'if /i "%~1"=="--product" (\n--dart-define=product_type=%PRODUCT_TYPE%';
+  assert.equal((await kioskSupport({ sourceFile: async (_, __, path) => path.endsWith('.bat') ? script : null }, project, 'main', 'kiosk')).supported, false);
+  const calls = [];
+  const remotes = remoteClients(config, async (url, options) => {
+    calls.push({ url, options });
+    return new Response('source', { status: 200 });
+  });
+  assert.equal(await remotes.sourceFile(project, 'feature/kiosk', 'scripts/build_windows.bat'), 'source');
+  assert.match(calls[0].url, /flutter-business%2Fself-checkout\/repository\/files\/scripts%2Fbuild_windows.bat\/raw\?ref=feature%2Fkiosk$/);
+  assert.equal(calls[0].options.redirect, 'error');
+  assert.equal(calls[0].options.headers['PRIVATE-TOKEN'], config.gitlab.token);
+  assert.equal(await remoteClients(config, async () => new Response('', { status: 404 })).sourceFile(project, 'main', 'missing'), null);
+  await assert.rejects(() => remoteClients(config, async () => new Response('', { status: 403 })).sourceFile(project, 'main', 'file'), /源码读取失败/);
+});

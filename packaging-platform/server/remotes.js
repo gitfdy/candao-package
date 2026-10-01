@@ -38,6 +38,14 @@ export function remoteClients(config, fetcher = fetch) {
       } while (page);
       return branches.sort();
     },
+    async sourceFile(project, branch, path) {
+      const response = await fetcher(`${gitlabBase}/api/v4/projects/${encodeURIComponent(project.gitlab)}/repository/files/${encodeURIComponent(path)}/raw?ref=${encodeURIComponent(branch)}`, {
+        headers: { 'PRIVATE-TOKEN': config.gitlab.token }, redirect: 'error', signal: AbortSignal.timeout(20000)
+      });
+      if (response.status === 404) return null;
+      if (!response.ok) fail('GitLab 源码读取失败，无法确认分支是否支持所选产品', 502);
+      return response.text();
+    },
     // Jenkins API tokens are exempt from CSRF crumbs; use tokens, never account passwords.
     async trigger(job, parameters) {
       const response = await jenkins(jobPath(job) + '/buildWithParameters', {
