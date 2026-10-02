@@ -21,7 +21,8 @@ async function load() {
   try {
     const build = props.build || await api(`/builds/${props.row.id}`, { signal: AbortSignal.any([signal, AbortSignal.timeout(45000)]) });
     const artifacts = build.artifacts || [];
-    externalLinks.value = artifacts.flatMap((artifact, index) => artifact.fileName === 'dufs-links.txt' ? [] : [{
+    // Keep original artifact indices for the download API; omit build metadata.
+    externalLinks.value = artifacts.flatMap((artifact, index) => !/\.(apk|aab|exe)$/i.test(artifact.fileName) ? [] : [{
       name: artifact.fileName,
       artifact,
       index
