@@ -35,7 +35,8 @@ try {
     SOURCE_REPO = 'https://git.can-dao.com/flutter-business/flutter-hpos.git'
     DUFS_URL = 'http://192.168.225.46:5000/dufs/HANDHELP_POS'
     FLUTTER_STORAGE_BASE_URL = 'https://storage.flutter-io.cn'
-    PUB_HOSTED_URL = 'https://pub.flutter-io.cn'
+    // Match the source repository's pubspec.lock to preserve generated Isar schemas.
+    PUB_HOSTED_URL = 'https://pub.dev'
     PUB_CACHE = 'C:\\Users\\Administrator\\AppData\\Local\\Pub\\Cache'
     GRADLE_USER_HOME = 'C:\\Users\\Administrator\\.gradle'
   }
@@ -95,17 +96,17 @@ try {
       steps {
         dir('source') {
           timeout(time: 60, unit: 'MINUTES') {
-          bat 'call .fvm\\flutter_sdk\\bin\\flutter.bat pub get'
+          bat 'call .fvm\\flutter_sdk\\bin\\flutter.bat pub get --enforce-lockfile'
           powershell '''
             $ErrorActionPreference = 'Stop'
             $flutter = '.\\.fvm\\flutter_sdk\\bin\\flutter.bat'
             $env:ANDROID_HOME = 'C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk'
             $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
             if (!(Test-Path -LiteralPath "$env:ANDROID_HOME\\platform-tools\\adb.exe")) { throw 'Android SDK missing' }
-            $args = @('build', 'apk', '--verbose')
+            $args = @('build', 'apk', '--verbose', '--no-pub')
             switch ($env:BUILD_TYPE) {
               'debug' { $args += '--debug' }
-              'test-prod' { $args += @('--release', '--dart-define=test_production=true') }
+              'test-prod' { $args += @('--release', '--dart-define=test_production=true', '--dart-define=show_ume=true') }
               'pre-prod' { $args += @('--release', '--dart-define=pre_production=true', '--dart-define=show_ume=true') }
               'release' { $args += '--release' }
               default { throw "Unsupported build type: $env:BUILD_TYPE" }
