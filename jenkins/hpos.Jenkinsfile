@@ -103,7 +103,8 @@ try {
             $env:ANDROID_HOME = 'C:\\Users\\Administrator\\AppData\\Local\\Android\\Sdk'
             $env:ANDROID_SDK_ROOT = $env:ANDROID_HOME
             if (!(Test-Path -LiteralPath "$env:ANDROID_HOME\\platform-tools\\adb.exe")) { throw 'Android SDK missing' }
-            $args = @('build', 'apk', '--verbose', '--no-pub')
+            # Flutter 3.38 needs pub enabled to regenerate the release plugin registrant.
+            $args = @('build', 'apk', '--verbose')
             switch ($env:BUILD_TYPE) {
               'debug' { $args += '--debug' }
               'test-prod' { $args += @('--release', '--dart-define=test_production=true', '--dart-define=show_ume=true') }
